@@ -590,8 +590,8 @@
                                    const s = getMatrixValue(e, m, 'S');
                                    return (
                                       <td key={m} className="text-center">
-                                         {p > 0 && <div className="text-emerald-600 font-bold">{Math.round(p)}</div>}
-                                         {s > 0 && <div className="text-rose-400">-{Math.round(s)}</div>}
+                                         {p > 0 && <div className="text-emerald-600 font-bold">{p.toFixed(2)}</div>}
+                                         {s > 0 && <div className="text-rose-400">-{s.toFixed(2)}</div>}
                                       </td>
                                    )
                                 })}
