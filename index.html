@@ -2,29 +2,873 @@
 <html lang="sl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moja Osebna Spletna Stran</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Malica Manager Pro</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"
+      }
+    }
+    </script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        header, footer { background-color: #f8f9fa; padding: 10px 20px; text-align: center; }
-        section { margin: 20px; padding: 20px; }
-        footer { font-size: 0.8em; }
+        @media print {
+            @page { margin: 1cm; size: A4; }
+            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            ::-webkit-scrollbar { display: none; }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 8px; }
+        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 10px; }
     </style>
 </head>
-<body>
-    <header>
-        <h1>Dobrodošli na moji osebni spletni strani</h1>
-    </header>
-    <section id="about-me">
-        <h2>O meni</h2>
-        <p>Tukaj je kratek opis o meni...</p>
-    </section>
-    <section id="my-projects">
-        <h2>Moji projekti</h2>
-        <p>Pregled mojih zadnjih projektov...</p>
-    </section>
-    <footer>
-        <p>Kontakt: [Vaš email]</p>
-    </footer>
+<body class="bg-slate-50 text-slate-900">
+
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+           Users, History, PlusCircle, Trash2, TrendingDown, 
+           CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
+           Wallet, Calculator, CheckCircle2, Download, 
+           AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X
+        } from 'lucide-react';
+        
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
+
+        // --- KONFIGURACIJA ZA GITHUB PAGES ---
+        // 1. KORAK: Kopiraj te podatke iz Firebase Console (Project Settings -> General -> Your apps)
+        const firebaseConfig = {
+          apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
+          authDomain: "vascan16a.firebaseapp.com",
+          projectId: "vascan16a",
+          storageBucket: "vascan16a.firebasestorage.app",
+          messagingSenderId: "103335922942",
+          appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
+        };
+
+        // Inicializacija
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // 2. KORAK: Določi unikatno ime za svojo aplikacijo (to določa, kje se shranjujejo podatki v bazi)
+        // Lahko pustiš tako ali spremeniš v npr. 'malica-firma-xy'
+        const appId = 'malica-manager-live-v1';
+        
+        const money = (val) => Math.round((val + Number.EPSILON) * 100) / 100;
+        
+        const ACCESS_CODE = "1243";
+        const ADMIN_PIN = "0000";
+
+        const App = () => {
+          const [user, setUser] = useState(null);
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [inputCode, setInputCode] = useState('');
+          const [authError, setAuthError] = useState(false);
+
+          const [members, setMembers] = useState([]);
+          const [history, setHistory] = useState([]);
+          const [loading, setLoading] = useState(true);
+
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [showAddMember, setShowAddMember] = useState(false);
+          const [newMemberName, setNewMemberName] = useState('');
+          
+          const [memberToDelete, setMemberToDelete] = useState(null);
+          const [showResetConfirm, setShowResetConfirm] = useState(false);
+          const [entryToDelete, setEntryToDelete] = useState(null);
+          
+          const [showAdminAuth, setShowAdminAuth] = useState(false);
+          const [adminPinInput, setAdminPinInput] = useState('');
+          const [pendingAction, setPendingAction] = useState(null);
+          const [adminAuthError, setAdminAuthError] = useState(false);
+          
+          const [isResetting, setIsResetting] = useState(false);
+          const [matrixType, setMatrixType] = useState('P');
+          const [manualStartBalances, setManualStartBalances] = useState({});
+
+          const [amount, setAmount] = useState('');
+          const [payer, setPayer] = useState('');
+          const [selectedParticipants, setSelectedParticipants] = useState([]);
+          const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+          const [splitType, setSplitType] = useState('equal');
+          const [manualAmounts, setManualAmounts] = useState({});
+
+          // 1. AUTH - POENOSTAVLJENO ZA GITHUB PAGES
+          useEffect(() => {
+            const initAuth = async () => {
+                // Na GitHub Pages nimamo custom tokenov, zato uporabimo direktno anonimno prijavo
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Napaka pri prijavi:", error);
+                }
+            };
+            initAuth();
+            const unsubscribe = onAuthStateChanged(auth, setUser);
+            return () => unsubscribe();
+          }, []);
+
+          // 2. DATA SYNC
+          useEffect(() => {
+            if (!user || !isAuthenticated) return;
+
+            const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
+            const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'history');
+
+            const unsubMembers = onSnapshot(membersRef, (snapshot) => {
+              const mList = snapshot.docs.map(doc => doc.data().name);
+              if (mList.length === 0 && loading) {
+                // Začetni člani se ustvarijo le ob prvem zagonu baze
+                const defaults = ["Martin", "Mitja", "Pavel", "Matej", "Zala", "Stela"];
+                defaults.forEach(async (n) => await setDoc(doc(membersRef, n), { name: n }));
+              } else {
+                setMembers(mList);
+              }
+            });
+
+            const unsubHistory = onSnapshot(historyRef, (snapshot) => {
+              const hList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              hList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+              setHistory(hList);
+              setLoading(false);
+            });
+
+            return () => { unsubMembers(); unsubHistory(); };
+          }, [user, isAuthenticated]);
+
+          useEffect(() => {
+            if (members.length > 0) {
+              if (!payer || !members.includes(payer)) setPayer(members[0]);
+              if (selectedParticipants.length === 0) setSelectedParticipants([...members]);
+            }
+          }, [members]);
+
+          const balances = useMemo(() => {
+            const b = {};
+            members.forEach(m => b[m] = 0);
+            
+            history.forEach(entry => {
+              if (!b.hasOwnProperty(entry.payer)) b[entry.payer] = 0;
+              if (entry.participants) entry.participants.forEach(p => { if (!b.hasOwnProperty(p)) b[p] = 0; });
+              if (entry.manualAmounts) Object.keys(entry.manualAmounts).forEach(p => { if (!b.hasOwnProperty(p)) b[p] = 0; });
+            });
+
+            history.forEach(entry => {
+              if (entry.type === 'adjustment') {
+                 b[entry.user] = money(b[entry.user] + entry.amount);
+                 return;
+              }
+              const numAmount = parseFloat(entry.amount) || 0;
+              if (b.hasOwnProperty(entry.payer)) b[entry.payer] += numAmount;
+
+              if (entry.splitType === 'manual' && entry.manualAmounts) {
+                Object.entries(entry.manualAmounts).forEach(([name, cost]) => {
+                  if (b.hasOwnProperty(name)) b[name] -= (parseFloat(cost) || 0);
+                });
+              } else if (entry.participants && entry.participants.length > 0) {
+                const costPer = numAmount / entry.participants.length;
+                entry.participants.forEach(p => { if (b.hasOwnProperty(p)) b[p] -= costPer; });
+              }
+            });
+
+            Object.keys(b).forEach(k => b[k] = money(b[k]));
+            return b;
+          }, [history, members]);
+
+          const payerRanking = useMemo(() => {
+            return [...members].sort((a, b) => (balances[a] || 0) - (balances[b] || 0));
+          }, [members, balances]);
+
+          const settlements = useMemo(() => {
+            const bCopy = { ...balances };
+            const debtors = [], creditors = [];
+            Object.entries(bCopy).forEach(([n, v]) => {
+              if (v < -0.01) debtors.push({ n, v: Math.abs(v) });
+              else if (v > 0.01) creditors.push({ n, v });
+            });
+            debtors.sort((a, b) => b.v - a.v);
+            creditors.sort((a, b) => b.v - a.v);
+            const res = [];
+            let di = 0, ci = 0;
+            while (di < debtors.length && ci < creditors.length) {
+              const amt = money(Math.min(debtors[di].v, creditors[ci].v));
+              if (amt > 0) {
+                res.push({ from: debtors[di].n, to: creditors[ci].n, amount: amt });
+                debtors[di].v = money(debtors[di].v - amt);
+                creditors[ci].v = money(creditors[ci].v - amt);
+              }
+              if (debtors[di].v <= 0) di++;
+              if (creditors[ci].v <= 0) ci++;
+            }
+            return res;
+          }, [balances]);
+
+          const isManualBalanced = useMemo(() => {
+            const sum = Object.values(manualAmounts).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+            return money(sum) === money(parseFloat(amount) || 0);
+          }, [manualAmounts, amount]);
+
+          const isResetBalanced = useMemo(() => {
+            const sum = Object.values(manualStartBalances).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+            return Math.abs(sum) < 0.01;
+          }, [manualStartBalances]);
+
+          const autoBalanceReset = () => {
+             const currentSum = Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0);
+             if (Math.abs(currentSum) < 0.01) return;
+             const diff = -currentSum;
+             const count = members.length;
+             const split = diff / count;
+             const newBalances = { ...manualStartBalances };
+             members.forEach(m => {
+                const currentVal = parseFloat(newBalances[m]) || 0;
+                newBalances[m] = money(currentVal + split);
+             });
+             setManualStartBalances(newBalances);
+          };
+
+          const handlePrintReport = () => {
+             window.print();
+          };
+
+          const addEntry = async (e) => {
+            e.preventDefault();
+            if (!user || !amount || selectedParticipants.length === 0) return;
+            if (splitType === 'manual' && !isManualBalanced) return;
+
+            const ref = collection(db, 'artifacts', appId, 'public', 'data', 'history');
+            const data = {
+              date, payer, amount: parseFloat(amount), 
+              participants: [...selectedParticipants], splitType, 
+              timestamp: Date.now(), opis: document.getElementById('opis-input')?.value || 'Malica'
+            };
+            if (splitType === 'manual') data.manualAmounts = { ...manualAmounts };
+            await addDoc(ref, data);
+            setAmount(''); setManualAmounts({}); setActiveTab('history');
+          };
+
+          const confirmDeleteEntry = (id, event) => {
+             if (event) event.stopPropagation();
+             setPendingAction({ type: 'DELETE', payload: id });
+             setAdminPinInput('');
+             setAdminAuthError(false);
+             setShowAdminAuth(true);
+          };
+
+          const performDeleteEntry = async () => {
+            if (!user || !entryToDelete) return;
+            try {
+               await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', entryToDelete));
+               setEntryToDelete(null); // Zapri modal
+            } catch(e) {
+               console.error(e);
+            }
+          };
+
+          const startResetProcess = () => {
+             setPendingAction({ type: 'RESET' });
+             setAdminPinInput('');
+             setAdminAuthError(false);
+             setShowAdminAuth(true);
+          };
+
+          const verifyAdminPin = () => {
+             if (adminPinInput === ADMIN_PIN) {
+                setShowAdminAuth(false);
+                if (pendingAction) {
+                    if (pendingAction.type === 'DELETE') {
+                        setEntryToDelete(pendingAction.payload);
+                    } else if (pendingAction.type === 'RESET') {
+                        const init = {};
+                        members.forEach(m => init[m] = 0);
+                        setManualStartBalances(init);
+                        setShowResetConfirm(true);
+                    }
+                }
+                setPendingAction(null);
+             } else {
+                setAdminAuthError(true);
+             }
+          };
+
+          const finalizeReset = async () => {
+            if (!user) return;
+            setIsResetting(true);
+            const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'history');
+            const snap = await getDocs(historyRef);
+            const batch = writeBatch(db);
+            snap.docs.forEach(d => batch.delete(d.ref));
+            
+            for (const [name, val] of Object.entries(manualStartBalances)) {
+               const v = parseFloat(val) || 0;
+               if (Math.abs(v) < 0.01) continue;
+               const newDoc = doc(historyRef);
+               batch.set(newDoc, { type: 'adjustment', user: name, amount: v, timestamp: Date.now(), date: new Date().toISOString().split('T')[0], opis: 'Začetno stanje' });
+            }
+            await batch.commit();
+            setIsResetting(false);
+            setShowResetConfirm(false);
+            setActiveTab('dashboard');
+          };
+
+          const addMember = async () => {
+            if (!user || !newMemberName.trim()) return;
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', newMemberName.trim()), { name: newMemberName.trim() });
+            setNewMemberName(''); setShowAddMember(false);
+          };
+
+          const removeMember = async (n) => {
+            if (!user) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', n));
+            setMemberToDelete(null);
+          };
+
+          const checkAccess = () => {
+            if (inputCode === ACCESS_CODE) { setIsAuthenticated(true); setAuthError(false); }
+            else { setAuthError(true); }
+          };
+
+          const getMatrixValue = (entry, member, type) => {
+             if (type === 'Z') {
+                return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
+             }
+             if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
+             else {
+                if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
+                if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
+                return 0;
+             }
+          };
+
+          if (!isAuthenticated) return (
+              <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white font-sans">
+                <div className="max-w-xs w-full text-center space-y-8 animate-fade-in">
+                  <div className="inline-flex p-4 bg-indigo-600 rounded-3xl shadow-2xl"><Lock size={48} /></div>
+                  <h1 className="text-3xl font-black">Malica Manager</h1>
+                  <div className="space-y-4">
+                    <input type="password" value={inputCode} onChange={e => setInputCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkAccess()} placeholder="••••" className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-bold tracking-[1em] outline-none focus:border-indigo-500 transition-all" autoFocus />
+                    {authError && <p className="text-rose-500 text-xs font-bold animate-bounce">Napačna koda!</p>}
+                    <button onClick={checkAccess} className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/10">ODKLENI</button>
+                  </div>
+                </div>
+              </div>
+          );
+
+          if (loading) return (<div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-400"><div className="text-center"><RefreshCcw className="animate-spin mx-auto mb-2" /><p className="font-bold">Nalaganje...</p></div></div>);
+
+          return (
+            <div className="min-h-screen bg-slate-50 pb-24 print:pb-0 font-sans">
+              
+              {showAdminAuth && (
+                <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-slate-100 text-center">
+                        <div className="flex justify-center mb-4">
+                            <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Lock size={32} /></div>
+                        </div>
+                        <h3 className="text-xl font-black text-slate-800 mb-2">Varnostna koda</h3>
+                        <p className="text-slate-500 text-xs mb-4">Za to akcijo je potreben administratorski PIN.</p>
+                        
+                        <input 
+                            type="password" 
+                            autoFocus
+                            value={adminPinInput} 
+                            onChange={e => setAdminPinInput(e.target.value)} 
+                            onKeyDown={e => e.key === 'Enter' && verifyAdminPin()}
+                            placeholder="••••" 
+                            className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2" 
+                        />
+                        {adminAuthError && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačen PIN!</p>}
+                        
+                        <div className="flex gap-2 mt-4">
+                            <button onClick={() => { setShowAdminAuth(false); setPendingAction(null); }} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 rounded-xl">Prekliči</button>
+                            <button onClick={verifyAdminPin} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Potrdi</button>
+                        </div>
+                    </div>
+                </div>
+              )}
+
+              {entryToDelete && (
+                 <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl border-2 border-slate-100">
+                       <div className="flex justify-center mb-4">
+                          <div className="bg-rose-100 p-3 rounded-full text-rose-500"><Trash2 size={32} /></div>
+                       </div>
+                       <h3 className="text-xl font-black text-center text-slate-800 mb-2">Izbrišem vnos?</h3>
+                       <p className="text-center text-slate-500 mb-6 text-sm">Tega dejanja ni mogoče razveljaviti.</p>
+                       <div className="flex gap-3">
+                          <button onClick={() => setEntryToDelete(null)} className="flex-1 py-3 font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200">Prekliči</button>
+                          <button onClick={performDeleteEntry} className="flex-1 py-3 font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 shadow-lg shadow-rose-200">Izbriši</button>
+                       </div>
+                    </div>
+                 </div>
+              )}
+
+              <div className="hidden print:block p-8 bg-white text-slate-900">
+                 <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
+                    <h1 className="text-3xl font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
+                    <p className="text-sm text-slate-500">Ustvarjeno: {new Date().toLocaleString('sl-SI')}</p>
+                 </div>
+
+                 {history.some(e => e.type === 'adjustment') && (
+                    <div className="mb-6">
+                       <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">1. Začetna Stanja (Prenos)</h3>
+                       <div className="grid grid-cols-4 gap-2">
+                          {history.filter(e => e.type === 'adjustment').map(e => (
+                             <div key={e.id} className="border p-2 text-xs flex justify-between rounded bg-slate-50">
+                                <span>{e.user}</span> <span className="font-bold">{e.amount.toFixed(2)} €</span>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                 )}
+
+                 <div className="mb-6">
+                    <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">2. Povzetek Obdobja</h3>
+                    <table className="w-full text-sm report-table">
+                       <thead><tr className="bg-slate-100"><th>Član</th><th className="text-right">Vplačila (P)</th><th className="text-right">Poraba (S)</th><th className="text-right">Neto Stanje</th></tr></thead>
+                       <tbody>
+                          {members.map(m => {
+                             const pTot = history.reduce((sum, e) => { if(e.type==='adjustment') return sum; return sum + (e.payer===m ? (parseFloat(e.amount)||0) : 0) }, 0);
+                             const sTot = history.reduce((sum, e) => { if(e.type==='adjustment') return sum; return sum + getMatrixValue(e, m, 'S') }, 0);
+                             const bal = balances[m] || 0;
+                             return (
+                                <tr key={m}>
+                                   <td className="font-bold">{m}</td>
+                                   <td className="text-right">{pTot.toFixed(2)} €</td>
+                                   <td className="text-right">{sTot.toFixed(2)} €</td>
+                                   <td className={`text-right font-bold ${bal>=0?'text-green-700':'text-red-700'}`}>{bal>=0?'+':''}{bal.toFixed(2)} €</td>
+                                </tr>
+                             )
+                          })}
+                       </tbody>
+                    </table>
+                 </div>
+
+                 <div className="mb-6">
+                    <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">3. Predlagan Poračun</h3>
+                    {settlements.length > 0 ? (
+                       <div className="grid grid-cols-2 gap-4">
+                          {settlements.map((s,i) => (
+                             <div key={i} className="border p-3 text-sm flex justify-between items-center bg-slate-50 rounded">
+                                <span className="font-medium">{s.from} &rarr; {s.to}</span> <span className="font-black bg-slate-900 text-white px-2 py-0.5 rounded">{s.amount.toFixed(2)} €</span>
+                             </div>
+                          ))}
+                       </div>
+                    ) : <p className="italic text-slate-500">Vse poravnano.</p>}
+                 </div>
+
+                 <div>
+                    <h3 className="font-bold text-lg mb-3 uppercase tracking-wider border-b pb-1">4. Transakcije</h3>
+                    <table className="w-full text-[10px] report-table">
+                       <thead>
+                          <tr className="bg-slate-100">
+                             <th className="w-20">Datum</th>
+                             <th>Opis</th>
+                             <th className="w-16 text-right">Znesek</th>
+                             {members.map(m => <th key={m} className="text-center w-8">{m.substring(0,2)}</th>)}
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {history.filter(e => e.type !== 'adjustment').map(e => (
+                             <tr key={e.id}>
+                                <td>{new Date(e.date).toLocaleDateString('sl-SI')}</td>
+                                <td className="truncate max-w-[120px]">{e.opis}</td>
+                                <td className="text-right font-bold">{e.amount.toFixed(2)}</td>
+                                {members.map(m => {
+                                   const p = getMatrixValue(e, m, 'P');
+                                   const s = getMatrixValue(e, m, 'S');
+                                   return (
+                                      <td key={m} className="text-center">
+                                         {p > 0 && <div className="text-emerald-600 font-bold">{Math.round(p)}</div>}
+                                         {s > 0 && <div className="text-rose-400">-{Math.round(s)}</div>}
+                                      </td>
+                                   )
+                                })}
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+
+              <header className="bg-gradient-to-br from-indigo-700 to-indigo-900 text-white p-6 rounded-b-[2.5rem] shadow-xl mb-6 print:hidden text-center relative overflow-hidden">
+                <h1 className="text-2xl font-bold flex items-center justify-center gap-2 relative z-10"><Wallet className="text-indigo-200" /> Malica Manager</h1>
+                <div className="flex items-center justify-center gap-2 mt-1"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div><p className="text-indigo-200 text-[10px] uppercase tracking-widest opacity-80">Cloud Sync Active</p></div>
+              </header>
+
+              <main className="max-w-md mx-auto px-4 print:hidden">
+              
+                {activeTab === 'dashboard' && (
+                  <div className="space-y-6 animate-fade-in">
+                    <div className="bg-white p-6 rounded-3xl shadow-lg border border-white text-center">
+                      <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Naslednji plača</p>
+                      <h2 className="text-4xl font-black text-indigo-900 mb-2">{payerRanking[0] || "Dodaj člana"}</h2>
+                      {payerRanking[0] && (
+                        <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-1.5 rounded-full text-sm font-bold text-slate-600">
+                          Bilanca: {balances[payerRanking[0]]?.toFixed(2)} €
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                      <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-700 flex items-center gap-2"><ListOrdered size={18} className="text-indigo-500" /> Vrstni red</h3>
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        {payerRanking.map((m, idx) => (
+                          <div key={m} className={`p-4 flex justify-between items-center ${idx === 0 ? 'bg-indigo-50/30' : ''}`}>
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{idx + 1}</span>
+                              <span className="font-bold text-slate-700">{m}</span>
+                            </div>
+                            <span className={`font-bold tabular-nums ${balances[m] >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{balances[m] >= 0 ? '+' : ''}{balances[m].toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          <Printer size={18} /> Shrani PDF Poročilo
+                    </button>
+                    
+                    <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all">
+                       <Grid size={18} /> Prikaži Matriko (P/S)
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === 'matrix' && (
+                   <div className="space-y-4 animate-fade-in">
+                      <div className="flex justify-between items-center px-1">
+                         <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Grid className="text-indigo-600" /> Matrike</h3>
+                         <div className="flex bg-slate-200 p-1 rounded-lg">
+                            <button onClick={() => setMatrixType('P')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'P' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}>Plačila</button>
+                            <button onClick={() => setMatrixType('S')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'S' ? 'bg-white shadow text-rose-600' : 'text-slate-500'}`}>Poraba</button>
+                            <button onClick={() => setMatrixType('Z')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'Z' ? 'bg-white shadow text-emerald-600' : 'text-slate-500'}`}>Začetno</button>
+                         </div>
+                      </div>
+                      
+                      <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                         <div className="overflow-x-auto custom-scrollbar pb-2">
+                            <table className="w-full text-xs whitespace-nowrap">
+                               <thead>
+                                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                                     <th className="p-3 text-left font-bold text-slate-400">Datum</th>
+                                     {members.map(m => (
+                                        <th key={m} className="p-3 text-right font-bold text-slate-600">{m.substring(0,3)}</th>
+                                     ))}
+                                     <th className="p-3 text-right font-black text-slate-800">Σ</th>
+                                  </tr>
+                               </thead>
+                               <tbody>
+                                  {matrixType === 'Z' && (() => {
+                                      const adjustments = history.filter(e => e.type === 'adjustment');
+                                      
+                                      const rowSum = members.reduce((sum, m) => {
+                                          const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                          return sum + val;
+                                      }, 0);
+
+                                      return (
+                                          <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
+                                              <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
+                                                  Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
+                                              </td>
+                                              {members.map(m => {
+                                                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                                  return (
+                                                      <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
+                                                          {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
+                                                      </td>
+                                                  );
+                                              })}
+                                              <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
+                                                  {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
+                                              </td>
+                                          </tr>
+                                      );
+                                  })()}
+
+                                  {history.map(entry => {
+                                     if (matrixType === 'Z') {
+                                         return null;
+                                     } else {
+                                         if (entry.type === 'adjustment') return null;
+                                     }
+
+                                     const rowSum = members.reduce((sum, m) => sum + getMatrixValue(entry, m, matrixType), 0);
+                                     return (
+                                        <tr key={entry.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                           <td className="p-3 text-slate-500 font-medium border-r border-slate-50">{new Date(entry.date).toLocaleDateString('sl-SI', {day:'numeric', month:'numeric'})} <span className="text-[9px] text-slate-300 ml-1">{entry.opis.substring(0,8)}</span></td>
+                                           {members.map(m => {
+                                              const val = getMatrixValue(entry, m, matrixType);
+                                              return (
+                                                 <td key={m} className={`p-3 text-right tabular-nums ${val !== 0 ? (matrixType==='S' ? 'text-rose-500' : (matrixType==='Z' ? (val>0?'text-emerald-600':'text-rose-500') : 'text-indigo-600 font-bold')) : 'text-slate-200'}`}>
+                                                    {val !== 0 ? val.toFixed(1) : '-'}
+                                                 </td>
+                                              )
+                                           })}
+                                           <td className="p-3 text-right font-bold text-slate-800 bg-slate-50/30">{rowSum.toFixed(1)}</td>
+                                        </tr>
+                                     )
+                                  })}
+                               </tbody>
+                               <tfoot>
+                                  <tr className="bg-slate-100 font-black text-slate-700">
+                                     <td className="p-3">SKUPAJ</td>
+                                     {members.map(m => {
+                                        const colSum = history.reduce((sum, e) => {
+                                           if (matrixType === 'Z') {
+                                                if (e.type === 'adjustment') {
+                                                    return sum + (e.user === m ? (parseFloat(e.amount) || 0) : 0);
+                                                }
+                                                return sum;
+                                           } else {
+                                                if (e.type === 'adjustment') return sum;
+                                                return sum + getMatrixValue(e, m, matrixType);
+                                           }
+                                        }, 0);
+                                        return <td key={m} className="p-3 text-right">{colSum.toFixed(1)}</td>
+                                     })}
+                                     <td className="p-3 text-right">
+                                        {history.reduce((tot, e) => {
+                                           if (matrixType === 'Z') {
+                                               if (e.type !== 'adjustment') return tot;
+                                           } else {
+                                               if (e.type === 'adjustment') return tot;
+                                           }
+                                           return tot + parseFloat(e.amount || 0);
+                                        }, 0).toFixed(1)}
+                                     </td>
+                                  </tr>
+                               </tfoot>
+                            </table>
+                         </div>
+                      </div>
+                      
+                      <button onClick={handlePrintReport} className="w-full mt-4 py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                         <Printer size={18} /> Shrani PDF Poročilo
+                      </button>
+                   </div>
+                )}
+
+                {activeTab === 'add' && (
+                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><PlusCircle className="text-indigo-600" /> Nov račun</h3>
+                    <form onSubmit={addEntry} className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Opis</label><input type="text" id="opis-input" placeholder="Spar, Pizza..." className="w-full p-3 bg-slate-50 rounded-xl outline-none" /></div>
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Datum</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl outline-none" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Znesek (€)</label><input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl font-bold text-lg outline-none" placeholder="0.00" /></div>
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Plačnik</label><select value={payer} onChange={e => setPayer(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl font-bold text-indigo-900 outline-none">{members.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+                      </div>
+
+                      <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
+                        <button type="button" onClick={() => setSplitType('equal')} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${splitType === 'equal' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Enakomerno</button>
+                        <button type="button" onClick={() => setSplitType('manual')} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${splitType === 'manual' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Po porabi</button>
+                      </div>
+
+                      <div className="flex justify-end px-1 pt-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setSelectedParticipants(selectedParticipants.length === members.length ? [] : [...members])}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-2 py-2"
+                        >
+                            {selectedParticipants.length === members.length ? (
+                                <CheckSquare size={18} />
+                            ) : (
+                                <Square size={18} />
+                            )}
+                            <span className="uppercase tracking-wider">Vsi</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {members.map(m => {
+                          const sel = selectedParticipants.includes(m);
+                          return (
+                            <div 
+                                key={m} 
+                                onClick={() => setSelectedParticipants(prev => prev.includes(m) ? prev.filter(p => p !== m) : [...prev, m])}
+                                className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${sel ? 'bg-indigo-50/50 border-indigo-100 shadow-sm' : 'border-slate-50 hover:bg-slate-50'}`}
+                            >
+                              <span className={`flex-1 text-sm font-bold ${sel ? 'text-slate-800' : 'text-slate-400'}`}>{m}</span>
+                              
+                              {splitType === 'manual' && sel ? (
+                                <div onClick={e => e.stopPropagation()}>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        placeholder="0.00" 
+                                        value={manualAmounts[m] || ''} 
+                                        onChange={e => setManualAmounts({...manualAmounts, [m]: e.target.value})} 
+                                        className="w-20 p-1 bg-white border rounded text-right text-xs font-bold" 
+                                    />
+                                </div>
+                              ) : (
+                                sel && <CheckCircle2 size={16} className="text-indigo-600" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {splitType === 'manual' && (
+                         <div className={`p-3 rounded-xl text-center text-xs font-bold ${isManualBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            Vsota: {Object.values(manualAmounts).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € / {parseFloat(amount||0).toFixed(2)} €
+                         </div>
+                      )}
+
+                      <button type="submit" disabled={!amount || selectedParticipants.length === 0 || (splitType === 'manual' && !isManualBalanced)} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl disabled:opacity-30">SHRANI RAČUN</button>
+                    </form>
+                  </div>
+                )}
+
+                {activeTab === 'history' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 px-2"><History className="text-indigo-600" /> Zgodovina</h3>
+                    <div className="space-y-3">
+                      {history.map(e => (
+                        <div key={e.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group flex justify-between items-start">
+                           <div className="flex gap-3">
+                              <div className="bg-slate-50 w-10 h-10 rounded-xl flex items-center justify-center flex-col text-slate-400 font-bold">
+                                 <span className="text-[8px] uppercase">{new Date(e.date).toLocaleString('sl-SI', {month:'short'})}</span>
+                                 <span className="text-sm leading-none">{new Date(e.date).getDate()}</span>
+                              </div>
+                              <div className="flex-1 min-w-0 pr-2">
+                                 <p className="text-sm font-bold text-slate-700">{e.payer} <span className="text-xs font-normal text-slate-400">je plačal</span></p>
+                                 <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] font-bold text-slate-500">{e.opis}</span>
+                                    <span className="text-[10px] text-slate-400 leading-tight">
+                                       {e.participants && e.participants.length > 0 ? e.participants.join(', ') : 'Ni udeležencev'}
+                                    </span>
+                                 </div>
+                              </div>
+                           </div>
+                           <div className="text-right shrink-0">
+                              <p className="font-black text-slate-800">{e.amount.toFixed(2)} €</p>
+                              {/* POPRAVLJENO BRISANJE: Gumb odpira modal */}
+                              <button onClick={(event) => confirmDeleteEntry(e.id, event)} className="p-2 -mr-2 text-rose-300 hover:text-rose-500 transition-colors mt-1"><Trash2 size={16} /></button>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'settle' && (
+                  <div className="space-y-6 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="text-indigo-600" /> Obračun</h3>
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-100 space-y-4">
+                      {settlements.length > 0 ? settlements.map((s, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                           <div className="flex-1 text-center bg-rose-50 rounded-xl p-2 font-bold text-xs">{s.from}</div>
+                           <div className="text-center min-w-[60px]"><p className="text-[10px] font-black bg-slate-800 text-white px-2 py-0.5 rounded-full">{s.amount.toFixed(2)} €</p><ArrowRightCircle size={14} className="mx-auto text-slate-200 mt-1" /></div>
+                           <div className="flex-1 text-center bg-emerald-50 rounded-xl p-2 font-bold text-xs">{s.to}</div>
+                        </div>
+                      )) : <div className="text-center py-10 text-slate-300 italic">Vse je poravnano!</div>}
+                    </div>
+                    
+                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                         <Printer size={18} /> Shrani PDF Poročilo
+                    </button>
+
+                    {showResetConfirm ? (
+                       <div className="bg-white border-2 border-indigo-500 p-6 rounded-3xl shadow-2xl space-y-6">
+                          
+                          {/* SPREMENJENO ZGLAVJE IN GUMB */}
+                          <div className="flex justify-between items-center mb-2">
+                             <h4 className="font-black text-indigo-900 flex items-center gap-2"><RefreshCcw size={20} /> Resetiraj</h4>
+                             <button onClick={() => setManualStartBalances({...balances})} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-indigo-100 transition-all border border-indigo-100">
+                                <ArrowDownCircle size={14} /> Prenesi stanja
+                             </button>
+                          </div>
+                          <p className="text-xs text-slate-400 -mt-4 mb-2">Vpiši ali prenesi končna stanja v novo obdobje.</p>
+
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                             {members.map(m => (
+                                <div key={m} className="flex justify-between items-center gap-4 bg-slate-50 p-2 rounded-xl">
+                                   <span className="text-sm font-bold text-slate-600">{m}</span>
+                                   <input type="number" step="0.01" placeholder="0.00" value={manualStartBalances[m] || ''} onChange={e => setManualStartBalances({...manualStartBalances, [m]: e.target.value})} className="w-24 p-2 rounded-lg border border-indigo-100 text-right font-black text-indigo-600" />
+                                </div>
+                             ))}
+                          </div>
+                          
+                          <div className={`p-3 rounded-2xl text-center text-xs font-bold ${isResetBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                             Vsota vseh stanj: {Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € (Mora biti 0)
+                          </div>
+                          <div className="flex gap-2">
+                             <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-slate-400 font-bold">Prekliči</button>
+                             <button disabled={!isResetBalanced || isResetting} onClick={finalizeReset} className="flex-[2] bg-indigo-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 disabled:opacity-20">{isResetting ? 'Brisanje...' : 'POTRDI IN ZAČNI'}</button>
+                          </div>
+                       </div>
+                    ) : (
+                      <button disabled={history.length === 0} onClick={startResetProcess} className="w-full bg-white border-2 border-slate-100 py-5 rounded-3xl font-black text-slate-600 flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"><RefreshCcw size={18} className="text-indigo-500" /> Zaključi obdobje</button>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'settings' && (
+                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><UserPlus className="text-indigo-600" /> Ekipa</h3>
+                    <div className="space-y-2 mb-6">
+                      {members.map(m => (
+                        <div key={m} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group transition-all hover:bg-white hover:shadow-sm">
+                           <span className="font-bold text-slate-600">{m}</span>
+                           {history.length === 0 && <button onClick={() => removeMember(m)} className="text-rose-200 hover:text-rose-500"><Trash2 size={16} /></button>}
+                        </div>
+                      ))}
+                    </div>
+                    {!showAddMember ? (
+                       <button onClick={() => setShowAddMember(true)} className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs">DODAJ ČLANA</button>
+                    ) : (
+                       <div className="flex gap-2"><input autoFocus type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="Ime..." className="flex-1 p-3 bg-slate-100 rounded-xl outline-none" onKeyDown={e => e.key === 'Enter' && addMember()} /><button onClick={addMember} className="bg-indigo-600 text-white px-6 rounded-xl font-black">DODAJ</button></div>
+                    )}
+                  </div>
+                )}
+              </main>
+
+              <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)] print:hidden z-50">
+                <div className="max-w-md mx-auto flex justify-between items-center">
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}><TrendingDown size={22} /><span className="text-[10px] mt-1 font-bold">Stanje</span></button>
+                  <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 rounded-xl ${activeTab === 'history' ? 'text-indigo-600' : 'text-slate-400'}`}><History size={22} /><span className="text-[10px] mt-1 font-bold">Zgodovina</span></button>
+                  <div className="relative -top-8"><button onClick={() => setActiveTab('add')} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl ${activeTab === 'add' ? 'bg-indigo-700' : 'bg-indigo-600'} text-white border-4 border-white active:scale-90 transition-all`}><PlusCircle size={32} /></button></div>
+                  <button onClick={() => setActiveTab('settle')} className={`flex flex-col items-center p-2 rounded-xl ${activeTab === 'settle' ? 'text-indigo-600' : 'text-slate-400'}`}><Calculator size={22} /><span className="text-[10px] mt-1 font-bold">Obračun</span></button>
+                  <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center p-2 rounded-xl ${activeTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`}><Users size={22} /><span className="text-[10px] mt-1 font-bold">Ekipa</span></button>
+                </div>
+              </nav>
+            </div>
+          );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
