@@ -447,7 +447,26 @@
              // 5. Opisi in Datumi
              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
+             // 6. LOGIKA IZRAČUNA (Dodano da deluje v Matlabu)
+             const calcStr = `
+% --- IZRAČUN ---
+total_placila = sum(P, 1);
+total_poraba = sum(S, 1);
+koncno_stanje = Z + total_placila - total_poraba;
+
+% --- IZPIS REZULTATOV ---
+fprintf('\\n----------------------------------\\n');
+fprintf(' KONČNO STANJE (Bilanca)\\n');
+fprintf('----------------------------------\\n');
+for i = 1:length(clani)
+    fprintf('%-10s: %8.2f EUR\\n', clani{i}, koncno_stanje(i));
+end
+fprintf('----------------------------------\\n');
+fprintf('KONTROLA (Sum): %8.4f\\n', sum(koncno_stanje));
+fprintf('----------------------------------\\n');
+`;
+
+             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}\n${calcStr}`;
           };
 
           if (!isAuthenticated) return (
