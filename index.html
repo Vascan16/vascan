@@ -23,71 +23,53 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* CSS ZA TISK (POPRAVLJENO ZA iOS) */
+        /* CSS ZA TISK (OPTIMIZIRANO ZA iOS) */
         @media print {
             @page { margin: 1cm; size: A4; }
             
-            /* Resetiranje HTML/BODY za tisk */
             html, body {
                 width: 100%;
-                height: auto !important;
-                min-height: 0 !important;
+                height: 100%;
                 margin: 0 !important;
                 padding: 0 !important;
                 overflow: visible !important;
                 background-color: white !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            /* Skrijemo vse elemente na strani z visibility */
-            body {
-                visibility: hidden;
+            /* Skrijemo vse elemente vmesnika */
+            body > * { display: none !important; } /* Skrije React root (začasno) */
+            
+            /* Pokažemo samo React root, ampak skrivamo njegovo vsebino selektivno */
+            body > #root { 
+                display: block !important; 
+                height: auto !important; 
+                width: 100% !important; 
+                position: static !important;
+                overflow: visible !important;
             }
 
-            /* Skrijemo specifične elemente, ki delajo prostor */
+            /* Znotraj aplikacije skrijemo navigacijo, header, main in modale */
             #root nav, 
             #root header, 
             #root main, 
-            #root .fixed,
-            .app-container > *:not(.print-container) { 
+            #root .fixed { 
                 display: none !important; 
             }
 
-            /* Resetiramo root in app container, da ne omejujeta višine */
-            #root, .app-container {
-                display: block !important;
-                height: auto !important;
-                min-height: 0 !important;
-                overflow: visible !important;
-                position: static !important;
-                visibility: hidden; /* Skrijemo wrapperje */
-            }
-
-            /* Prisilno pokažemo print container in ga pozicioniramo absolutno na vrh */
-            .print-container, .print-container * {
-                visibility: visible !important;
-                display: block !important;
-            }
-
+            /* Prisilno pokažemo print container */
             .print-container {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
+                display: block !important;
+                position: static !important; /* Na iOS static deluje bolje kot absolute */
                 width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white;
-                color: black;
+                height: auto !important;
+                overflow: visible !important;
                 font-family: sans-serif;
                 font-size: 10px;
-                z-index: 9999;
+                color: black;
+                background: white;
             }
-            
-            /* Tabela in flex popravki za tisk */
-            .print-container .flex { display: flex !important; }
-            .print-container .grid { display: grid !important; }
-            .print-container table { display: table !important; }
 
             /* Skrijemo scrollbare */
             ::-webkit-scrollbar { display: none; }
@@ -132,7 +114,6 @@
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
 
        // --- KONFIGURACIJA ZA GITHUB PAGES ---
-        // 1. KORAK: Kopiraj te podatke iz Firebase Console (Project Settings -> General -> Your apps)
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
           authDomain: "vascan16a.firebaseapp.com",
@@ -321,7 +302,7 @@
           };
 
           const handlePrintReport = () => {
-              window.print();
+             window.print();
           };
 
           const addEntry = async (e) => {
@@ -341,11 +322,11 @@
           };
 
           const confirmDeleteEntry = (id, event) => {
-              if (event) event.stopPropagation();
-              setPendingAction({ type: 'DELETE', payload: id });
-              setAdminPinInput('');
-              setAdminAuthError(false);
-              setShowAdminAuth(true);
+             if (event) event.stopPropagation();
+             setPendingAction({ type: 'DELETE', payload: id });
+             setAdminPinInput('');
+             setAdminAuthError(false);
+             setShowAdminAuth(true);
           };
 
           const performDeleteEntry = async () => {
@@ -359,29 +340,29 @@
           };
 
           const startResetProcess = () => {
-              setPendingAction({ type: 'RESET' });
-              setAdminPinInput('');
-              setAdminAuthError(false);
-              setShowAdminAuth(true);
+             setPendingAction({ type: 'RESET' });
+             setAdminPinInput('');
+             setAdminAuthError(false);
+             setShowAdminAuth(true);
           };
 
           const verifyAdminPin = () => {
-              if (adminPinInput === ADMIN_PIN) {
-                 setShowAdminAuth(false);
-                 if (pendingAction) {
-                     if (pendingAction.type === 'DELETE') {
-                         setEntryToDelete(pendingAction.payload);
-                     } else if (pendingAction.type === 'RESET') {
-                         const init = {};
-                         members.forEach(m => init[m] = 0);
-                         setManualStartBalances(init);
-                         setShowResetConfirm(true);
-                     }
-                 }
-                 setPendingAction(null);
-              } else {
-                 setAdminAuthError(true);
-              }
+             if (adminPinInput === ADMIN_PIN) {
+                setShowAdminAuth(false);
+                if (pendingAction) {
+                    if (pendingAction.type === 'DELETE') {
+                        setEntryToDelete(pendingAction.payload);
+                    } else if (pendingAction.type === 'RESET') {
+                        const init = {};
+                        members.forEach(m => init[m] = 0);
+                        setManualStartBalances(init);
+                        setShowResetConfirm(true);
+                    }
+                }
+                setPendingAction(null);
+             } else {
+                setAdminAuthError(true);
+             }
           };
 
           const finalizeReset = async () => {
@@ -422,48 +403,51 @@
           };
 
           const getMatrixValue = (entry, member, type) => {
-              if (type === 'Z') {
-                 return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
-              }
-              if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
-              else {
-                 if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
-                 if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
-                 return 0;
-              }
+             if (type === 'Z') {
+                return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
+             }
+             if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
+             else {
+                if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
+                if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
+                return 0;
+             }
           };
 
           // GENERACIJA MATLAB KODE
           const getMatlabCode = () => {
-              const adjustments = history.filter(e => e.type === 'adjustment');
-              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
-              
-              // 1. Člani
-              const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
-              
-              // 2. Začetno stanje
-              const zVector = members.map(m => {
-                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
-                  return val.toFixed(2);
-              }).join(', ');
-              const zStr = `Z = [${zVector}];`;
-              
-              // 3. Matrika Plačil (P) - vrstice so transakcije
-              const pRows = transactions.map(t => {
-                  return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
-              });
-              const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
-              
-              // 4. Matrika Porabe (S) - vrstice so transakcije
-              const sRows = transactions.map(t => {
-                  return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
-              });
-              const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
-              
-              // 5. Opisi in Datumi (Dodatno za kontekst)
-              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
+             const adjustments = history.filter(e => e.type === 'adjustment');
+             const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
+             
+             // 1. Člani
+             const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
+             
+             // 2. Začetno stanje (Z)
+             const zVector = members.map(m => {
+                 const val = adjustments.reduce((s, e) => s + (e.user === m ? parseFloat(e.amount) : 0), 0);
+                 return val.toFixed(2);
+             }).join(', ');
+             const zStr = `Z = [${zVector}]; % Začetna stanja`;
+             
+             // 3. Matrika Plačil (P) - vrstice so transakcije
+             const pRows = transactions.map(t => {
+                 return members.map(m => {
+                     const val = t.payer === m ? parseFloat(t.amount) : 0;
+                     return val.toFixed(2);
+                 }).join(', ');
+             });
+             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n]; % Matrika Plačil (P)`;
+             
+             // 4. Matrika Porabe (S) - vrstice so transakcije
+             const sRows = transactions.map(t => {
+                 return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
+             });
+             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n]; % Matrika Porabe (S)`;
+             
+             // 5. Opisi in Datumi
+             const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-              return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
+             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
           };
 
           if (!isAuthenticated) return (
@@ -662,9 +646,7 @@
                       </div>
                     </div>
                     
-                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                          <Printer size={18} /> Shrani PDF Poročilo
-                    </button>
+                    {/* GUMB JE ODSTRANJEN KOT ZAHTEVANO */}
                     
                     <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all">
                        <Grid size={18} /> Prikaži Matriko (P/S)
@@ -705,22 +687,22 @@
                                      }, 0);
 
                                      return (
-                                         <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
-                                             <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
-                                                 Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
-                                             </td>
-                                             {members.map(m => {
-                                                 const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
-                                                 return (
-                                                     <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
-                                                         {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
-                                                     </td>
-                                                 );
-                                             })}
-                                             <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
-                                                 {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
-                                             </td>
-                                         </tr>
+                                        <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
+                                            <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
+                                                Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
+                                            </td>
+                                            {members.map(m => {
+                                                const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                                return (
+                                                    <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
+                                                        {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
+                                                {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
+                                            </td>
+                                        </tr>
                                      );
                                   })()}
 
@@ -851,9 +833,9 @@
                       </div>
                       
                       {splitType === 'manual' && (
-                          <div className={`p-3 rounded-xl text-center text-xs font-bold ${isManualBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                             Vsota: {Object.values(manualAmounts).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € / {parseFloat(amount||0).toFixed(2)} €
-                          </div>
+                         <div className={`p-3 rounded-xl text-center text-xs font-bold ${isManualBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            Vsota: {Object.values(manualAmounts).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € / {parseFloat(amount||0).toFixed(2)} €
+                         </div>
                       )}
 
                       <button type="submit" disabled={!amount || selectedParticipants.length === 0 || (splitType === 'manual' && !isManualBalanced)} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl disabled:opacity-30">SHRANI RAČUN</button>
@@ -907,7 +889,7 @@
                     </div>
                     
                     <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                          <Printer size={18} /> Shrani PDF Poročilo
+                         <Printer size={18} /> Shrani PDF Poročilo
                     </button>
 
                     {showResetConfirm ? (
