@@ -7,8 +7,6 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    
     <script type="importmap">
     {
       "imports": {
@@ -21,9 +19,86 @@
       }
     }
     </script>
+
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
+        /* CSS ZA TISK (POPRAVLJENO ZA iOS) */
+        @media print {
+            @page { margin: 1cm; size: A4; }
+            
+            /* Resetiranje HTML/BODY za tisk */
+            html, body {
+                width: 100%;
+                height: auto !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background-color: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Skrijemo vse elemente na strani z visibility */
+            body {
+                visibility: hidden;
+            }
+
+            /* Skrijemo specifične elemente, ki delajo prostor */
+            #root nav, 
+            #root header, 
+            #root main, 
+            #root .fixed,
+            .app-container > *:not(.print-container) { 
+                display: none !important; 
+            }
+
+            /* Resetiramo root in app container, da ne omejujeta višine */
+            #root, .app-container {
+                display: block !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                position: static !important;
+                visibility: hidden; /* Skrijemo wrapperje */
+            }
+
+            /* Prisilno pokažemo print container in ga pozicioniramo absolutno na vrh */
+            .print-container, .print-container * {
+                visibility: visible !important;
+                display: block !important;
+            }
+
+            .print-container {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white;
+                color: black;
+                font-family: sans-serif;
+                font-size: 10px;
+                z-index: 9999;
+            }
+            
+            /* Tabela in flex popravki za tisk */
+            .print-container .flex { display: flex !important; }
+            .print-container .grid { display: grid !important; }
+            .print-container table { display: table !important; }
+
+            /* Skrijemo scrollbare */
+            ::-webkit-scrollbar { display: none; }
+            
+            /* Prelomi strani */
+            .page-break { page-break-before: always; }
+            .avoid-break { page-break-inside: avoid; }
+        }
+        
+        .print-container { display: none; } /* Na ekranu skrito */
+
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -31,42 +106,11 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         
         /* Za lepši izgled tabele v poročilu */
-        .report-table th, .report-table td { border: 1px solid #94a3b8; padding: 4px 6px; }
-        .report-table th { background-color: #e2e8f0; font-weight: bold; text-transform: uppercase; font-size: 9px; color: #334155; }
-        .report-table td { font-size: 9px; color: #0f172a; }
+        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
+        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
         
         /* Matlab code block style */
-        .code-block { 
-            font-family: 'Courier New', Courier, monospace; 
-            background-color: #f1f5f9; 
-            padding: 10px; 
-            border: 1px solid #cbd5e1; 
-            border-radius: 4px; 
-            white-space: pre-wrap; 
-            font-size: 8px; 
-            color: #334155; 
-            word-break: break-all;
-        }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* --- NOVI CSS ZA PDF GENERATOR --- */
-        #pdf-hidden-container {
-            position: absolute;
-            left: -9999px;
-            top: 0;
-            width: 750px; /* A4 širina minus margine */
-            background-color: white;
-            padding: 30px;
-            font-family: sans-serif;
-            color: black;
-        }
-        
-        #pdf-hidden-container h1 { font-size: 20px; margin-bottom: 5px; color: #1e1b4b; }
-        #pdf-hidden-container h2 { font-size: 14px; margin-top: 15px; margin-bottom: 8px; border-bottom: 2px solid #334155; padding-bottom: 2px; color: #334155; uppercase; font-weight: bold; }
-        #pdf-hidden-container .pdf-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-        .page-break { page-break-before: always; }
-        .avoid-break { page-break-inside: avoid; }
+        .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -74,20 +118,21 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo, useRef } from 'react';
+        import React, { useState, useEffect, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
-            Users, History, PlusCircle, Trash2, TrendingDown, 
-            CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
-            Wallet, Calculator, CheckCircle2, Download, 
-            AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X, Loader2
+           Users, History, PlusCircle, Trash2, TrendingDown, 
+           CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
+           Wallet, Calculator, CheckCircle2, Download, 
+           AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X
         } from 'lucide-react';
         
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
 
-       // --- KONFIGURACIJA (Nespremenjeno) ---
+       // --- KONFIGURACIJA ZA GITHUB PAGES ---
+        // 1. KORAK: Kopiraj te podatke iz Firebase Console (Project Settings -> General -> Your apps)
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
           authDomain: "vascan16a.firebaseapp.com",
@@ -97,12 +142,15 @@
           appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
         };
 
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
         const appId = 'malica-manager-live-v1';
+        
         const money = (val) => Math.round((val + Number.EPSILON) * 100) / 100;
+        
         const ACCESS_CODE = "1243";
         const ADMIN_PIN = "0000";
 
@@ -140,21 +188,24 @@
           const [splitType, setSplitType] = useState('equal');
           const [manualAmounts, setManualAmounts] = useState({});
 
-          const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-
           // 1. AUTH
           useEffect(() => {
             const initAuth = async () => {
-                try { await signInAnonymously(auth); } 
-                catch (error) { console.error("Napaka:", error); }
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Napaka pri prijavi:", error);
+                }
             };
             initAuth();
-            return onAuthStateChanged(auth, setUser);
+            const unsubscribe = onAuthStateChanged(auth, setUser);
+            return () => unsubscribe();
           }, []);
 
           // 2. DATA SYNC
           useEffect(() => {
             if (!user || !isAuthenticated) return;
+
             const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
             const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'history');
 
@@ -163,7 +214,9 @@
               if (mList.length === 0 && loading) {
                 const defaults = ["Martin", "Mitja", "Pavel", "Matej", "Zala", "Stela"];
                 defaults.forEach(async (n) => await setDoc(doc(membersRef, n), { name: n }));
-              } else { setMembers(mList); }
+              } else {
+                setMembers(mList);
+              }
             });
 
             const unsubHistory = onSnapshot(historyRef, (snapshot) => {
@@ -172,6 +225,7 @@
               setHistory(hList);
               setLoading(false);
             });
+
             return () => { unsubMembers(); unsubHistory(); };
           }, [user, isAuthenticated]);
 
@@ -187,7 +241,6 @@
             members.forEach(m => b[m] = 0);
             
             history.forEach(entry => {
-               // Init keys
               if (!b.hasOwnProperty(entry.payer)) b[entry.payer] = 0;
               if (entry.participants) entry.participants.forEach(p => { if (!b.hasOwnProperty(p)) b[p] = 0; });
               if (entry.manualAmounts) Object.keys(entry.manualAmounts).forEach(p => { if (!b.hasOwnProperty(p)) b[p] = 0; });
@@ -210,6 +263,7 @@
                 entry.participants.forEach(p => { if (b.hasOwnProperty(p)) b[p] -= costPer; });
               }
             });
+
             Object.keys(b).forEach(k => b[k] = money(b[k]));
             return b;
           }, [history, members]);
@@ -252,45 +306,29 @@
             return Math.abs(sum) < 0.01;
           }, [manualStartBalances]);
 
-          // --- HELPER FOR MATRIX VALUES ---
-          const getMatrixValue = (entry, member, type) => {
-              if (type === 'Z') {
-                 return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
-              }
-              if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
-              else { // type === 'S'
-                 if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
-                 if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
-                 return 0;
-              }
-          };
-
-          // --- PDF GENERATOR FUNCTION ---
-          const handlePrintReport = () => {
-             setIsGeneratingPdf(true);
-             const element = document.getElementById('pdf-hidden-container');
-             const opt = {
-               margin:       10,
-               filename:     `MalicaManager_FULL_${new Date().toISOString().split('T')[0]}.pdf`,
-               image:        { type: 'jpeg', quality: 0.98 },
-               html2canvas:  { scale: 2 },
-               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-             };
-
-             window.html2pdf().set(opt).from(element).save().then(() => {
-                 setIsGeneratingPdf(false);
-             }).catch(err => {
-                 console.error(err);
-                 setIsGeneratingPdf(false);
-                 alert("Napaka pri ustvarjanju PDF.");
+          const autoBalanceReset = () => {
+             const currentSum = Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0);
+             if (Math.abs(currentSum) < 0.01) return;
+             const diff = -currentSum;
+             const count = members.length;
+             const split = diff / count;
+             const newBalances = { ...manualStartBalances };
+             members.forEach(m => {
+                const currentVal = parseFloat(newBalances[m]) || 0;
+                newBalances[m] = money(currentVal + split);
              });
+             setManualStartBalances(newBalances);
           };
 
-          // --- LOGIC FUNCTIONS (ADD, DELETE, RESET) ---
+          const handlePrintReport = () => {
+              window.print();
+          };
+
           const addEntry = async (e) => {
             e.preventDefault();
             if (!user || !amount || selectedParticipants.length === 0) return;
             if (splitType === 'manual' && !isManualBalanced) return;
+
             const ref = collection(db, 'artifacts', appId, 'public', 'data', 'history');
             const data = {
               date, payer, amount: parseFloat(amount), 
@@ -305,30 +343,45 @@
           const confirmDeleteEntry = (id, event) => {
               if (event) event.stopPropagation();
               setPendingAction({ type: 'DELETE', payload: id });
-              setAdminPinInput(''); setAdminAuthError(false); setShowAdminAuth(true);
+              setAdminPinInput('');
+              setAdminAuthError(false);
+              setShowAdminAuth(true);
           };
 
           const performDeleteEntry = async () => {
             if (!user || !entryToDelete) return;
-            try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', entryToDelete)); setEntryToDelete(null); } catch(e) { console.error(e); }
+            try {
+               await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', entryToDelete));
+               setEntryToDelete(null); // Zapri modal
+            } catch(e) {
+               console.error(e);
+            }
           };
 
           const startResetProcess = () => {
               setPendingAction({ type: 'RESET' });
-              setAdminPinInput(''); setAdminAuthError(false); setShowAdminAuth(true);
+              setAdminPinInput('');
+              setAdminAuthError(false);
+              setShowAdminAuth(true);
           };
 
           const verifyAdminPin = () => {
               if (adminPinInput === ADMIN_PIN) {
                  setShowAdminAuth(false);
                  if (pendingAction) {
-                     if (pendingAction.type === 'DELETE') setEntryToDelete(pendingAction.payload);
-                     else if (pendingAction.type === 'RESET') {
-                         const init = {}; members.forEach(m => init[m] = 0); setManualStartBalances(init); setShowResetConfirm(true);
+                     if (pendingAction.type === 'DELETE') {
+                         setEntryToDelete(pendingAction.payload);
+                     } else if (pendingAction.type === 'RESET') {
+                         const init = {};
+                         members.forEach(m => init[m] = 0);
+                         setManualStartBalances(init);
+                         setShowResetConfirm(true);
                      }
                  }
                  setPendingAction(null);
-              } else setAdminAuthError(true);
+              } else {
+                 setAdminAuthError(true);
+              }
           };
 
           const finalizeReset = async () => {
@@ -338,6 +391,7 @@
             const snap = await getDocs(historyRef);
             const batch = writeBatch(db);
             snap.docs.forEach(d => batch.delete(d.ref));
+            
             for (const [name, val] of Object.entries(manualStartBalances)) {
                const v = parseFloat(val) || 0;
                if (Math.abs(v) < 0.01) continue;
@@ -345,7 +399,9 @@
                batch.set(newDoc, { type: 'adjustment', user: name, amount: v, timestamp: Date.now(), date: new Date().toISOString().split('T')[0], opis: 'Začetno stanje' });
             }
             await batch.commit();
-            setIsResetting(false); setShowResetConfirm(false); setActiveTab('dashboard');
+            setIsResetting(false);
+            setShowResetConfirm(false);
+            setActiveTab('dashboard');
           };
 
           const addMember = async () => {
@@ -365,25 +421,47 @@
             else { setAuthError(true); }
           };
 
+          const getMatrixValue = (entry, member, type) => {
+              if (type === 'Z') {
+                 return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
+              }
+              if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
+              else {
+                 if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
+                 if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
+                 return 0;
+              }
+          };
+
           // GENERACIJA MATLAB KODE
           const getMatlabCode = () => {
               const adjustments = history.filter(e => e.type === 'adjustment');
-              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); 
+              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
               
+              // 1. Člani
               const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
+              
+              // 2. Začetno stanje
               const zVector = members.map(m => {
                   const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
                   return val.toFixed(2);
               }).join(', ');
-              const zStr = `Z = [${zVector}];`; // Začetno stanje
+              const zStr = `Z = [${zVector}];`;
               
-              const pRows = transactions.map(t => members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', '));
+              // 3. Matrika Plačil (P) - vrstice so transakcije
+              const pRows = transactions.map(t => {
+                  return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
+              });
               const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
               
-              const sRows = transactions.map(t => members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', '));
+              // 4. Matrika Porabe (S) - vrstice so transakcije
+              const sRows = transactions.map(t => {
+                  return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
+              });
               const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
               
-              const metaStr = `% Opisi:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
+              // 5. Opisi in Datumi (Dodatno za kontekst)
+              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
               return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
           };
@@ -393,9 +471,11 @@
                 <div className="max-w-xs w-full text-center space-y-8 animate-fade-in">
                   <div className="inline-flex p-4 bg-indigo-600 rounded-3xl shadow-2xl"><Lock size={48} /></div>
                   <h1 className="text-3xl font-black">Malica Manager</h1>
-                  <input type="password" value={inputCode} onChange={e => setInputCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkAccess()} placeholder="••••" className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-bold tracking-[1em] outline-none focus:border-indigo-500 transition-all" autoFocus />
-                  {authError && <p className="text-rose-500 text-xs font-bold animate-bounce">Napačna koda!</p>}
-                  <button onClick={checkAccess} className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/10">ODKLENI</button>
+                  <div className="space-y-4">
+                    <input type="password" value={inputCode} onChange={e => setInputCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkAccess()} placeholder="••••" className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 text-center text-3xl font-bold tracking-[1em] outline-none focus:border-indigo-500 transition-all" autoFocus />
+                    {authError && <p className="text-rose-500 text-xs font-bold animate-bounce">Napačna koda!</p>}
+                    <button onClick={checkAccess} className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/10">ODKLENI</button>
+                  </div>
                 </div>
               </div>
           );
@@ -404,54 +484,75 @@
 
           return (
             <div className="min-h-screen bg-slate-50 pb-24 font-sans app-container">
-                    
-                {showAdminAuth && (
+              
+              {showAdminAuth && (
                 <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-slate-100 text-center">
-                        <div className="flex justify-center mb-4"><div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Lock size={32} /></div></div>
+                        <div className="flex justify-center mb-4">
+                            <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Lock size={32} /></div>
+                        </div>
                         <h3 className="text-xl font-black text-slate-800 mb-2">Varnostna koda</h3>
-                        <input type="password" autoFocus value={adminPinInput} onChange={e => setAdminPinInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && verifyAdminPin()} placeholder="••••" className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2" />
+                        <p className="text-slate-500 text-xs mb-4">Za to akcijo je potreben administratorski PIN.</p>
+                        
+                        <input 
+                            type="password" 
+                            autoFocus
+                            value={adminPinInput} 
+                            onChange={e => setAdminPinInput(e.target.value)} 
+                            onKeyDown={e => e.key === 'Enter' && verifyAdminPin()}
+                            placeholder="••••" 
+                            className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2" 
+                        />
                         {adminAuthError && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačen PIN!</p>}
-                        <div className="flex gap-2 mt-4"><button onClick={() => { setShowAdminAuth(false); setPendingAction(null); }} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 rounded-xl">Prekliči</button><button onClick={verifyAdminPin} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Potrdi</button></div>
+                        
+                        <div className="flex gap-2 mt-4">
+                            <button onClick={() => { setShowAdminAuth(false); setPendingAction(null); }} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 rounded-xl">Prekliči</button>
+                            <button onClick={verifyAdminPin} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Potrdi</button>
+                        </div>
                     </div>
                 </div>
-                )}
+              )}
 
-                {entryToDelete && (
+              {entryToDelete && (
                  <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl border-2 border-slate-100">
-                       <h3 className="text-xl font-black text-center text-slate-800 mb-2 mt-4">Izbrišem vnos?</h3>
-                       <div className="flex gap-3 mt-6"><button onClick={() => setEntryToDelete(null)} className="flex-1 py-3 font-bold text-slate-500 bg-slate-100 rounded-xl">Prekliči</button><button onClick={performDeleteEntry} className="flex-1 py-3 font-bold text-white bg-rose-500 rounded-xl">Izbriši</button></div>
+                       <div className="flex justify-center mb-4">
+                          <div className="bg-rose-100 p-3 rounded-full text-rose-500"><Trash2 size={32} /></div>
+                       </div>
+                       <h3 className="text-xl font-black text-center text-slate-800 mb-2">Izbrišem vnos?</h3>
+                       <p className="text-center text-slate-500 mb-6 text-sm">Tega dejanja ni mogoče razveljaviti.</p>
+                       <div className="flex gap-3">
+                          <button onClick={() => setEntryToDelete(null)} className="flex-1 py-3 font-bold text-slate-500 bg-slate-100 rounded-xl hover:bg-slate-200">Prekliči</button>
+                          <button onClick={performDeleteEntry} className="flex-1 py-3 font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 shadow-lg shadow-rose-200">Izbriši</button>
+                       </div>
                     </div>
                  </div>
-                )}
+              )}
 
-              {/* --- HIDDEN PDF CONTAINER (Z VSEMI PODATKI) --- */}
-              <div id="pdf-hidden-container">
-                 <div className="text-center border-b-2 border-slate-800 pb-2 mb-4">
-                    <h1 className="font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
-                    <p className="text-[10px] text-slate-500">Generirano: {new Date().toLocaleString('sl-SI')}</p>
+              {/* PRINT ONLY CONTAINER - Optimized for iOS */}
+              <div className="print-container p-8">
+                 <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
+                    <h1 className="text-2xl font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
+                    <p className="text-xs text-slate-500">Ustvarjeno: {new Date().toLocaleString('sl-SI')}</p>
                  </div>
 
-                 {/* 1. Začetno stanje */}
-                 <div className="avoid-break mb-4">
-                    <h2>1. Začetna Stanja (Z)</h2>
-                    {history.some(e => e.type === 'adjustment') ? (
-                       <div className="pdf-grid">
+                 {history.some(e => e.type === 'adjustment') && (
+                    <div className="mb-6 avoid-break">
+                       <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">1. Začetna Stanja</h3>
+                       <div className="grid grid-cols-4 gap-2">
                           {history.filter(e => e.type === 'adjustment').map(e => (
-                             <div key={e.id} className="border p-1 text-[9px] flex justify-between rounded bg-slate-50">
+                             <div key={e.id} className="border p-2 text-xs flex justify-between rounded bg-slate-50">
                                 <span>{e.user}</span> <span className="font-bold">{e.amount.toFixed(2)} €</span>
                              </div>
                           ))}
                        </div>
-                    ) : <p className="text-[9px] italic text-slate-400">Ni začetnih stanj.</p>}
-                 </div>
+                    </div>
+                 )}
 
-                 {/* 2. Trenutno stanje (Summary) */}
-                 <div className="avoid-break mb-4">
-                    <h2>2. Trenutno Stanje (Bilanca)</h2>
-                    <table className="w-full text-[9px] report-table">
-                       <thead><tr><th>Član</th><th className="text-right">Vplačila (P)</th><th className="text-right">Poraba (S)</th><th className="text-right">Neto Stanje</th></tr></thead>
+                 <div className="mb-6 avoid-break">
+                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">2. Povzetek Obdobja</h3>
+                    <table className="w-full text-xs report-table">
+                       <thead><tr className="bg-slate-100"><th>Član</th><th className="text-right">Vplačila (P)</th><th className="text-right">Poraba (S)</th><th className="text-right">Neto Stanje</th></tr></thead>
                        <tbody>
                           {members.map(m => {
                              const pTot = history.reduce((sum, e) => { if(e.type==='adjustment') return sum; return sum + (e.payer===m ? (parseFloat(e.amount)||0) : 0) }, 0);
@@ -460,9 +561,9 @@
                              return (
                                 <tr key={m}>
                                    <td className="font-bold">{m}</td>
-                                   <td className="text-right">{pTot.toFixed(2)}</td>
-                                   <td className="text-right">{sTot.toFixed(2)}</td>
-                                   <td className={`text-right font-bold ${bal>=0?'text-green-700':'text-red-700'}`}>{bal.toFixed(2)} €</td>
+                                   <td className="text-right">{pTot.toFixed(2)} €</td>
+                                   <td className="text-right">{sTot.toFixed(2)} €</td>
+                                   <td className={`text-right font-bold ${bal>=0?'text-green-700':'text-red-700'}`}>{bal>=0?'+':''}{bal.toFixed(2)} €</td>
                                 </tr>
                              )
                           })}
@@ -470,45 +571,43 @@
                     </table>
                  </div>
 
-                 {/* 3. Obračun */}
-                 <div className="avoid-break mb-4">
-                    <h2>3. Predlagan Poračun</h2>
+                 <div className="mb-6 avoid-break">
+                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">3. Predlagan Poračun</h3>
                     {settlements.length > 0 ? (
-                       <div className="pdf-grid">
+                       <div className="grid grid-cols-2 gap-4">
                           {settlements.map((s,i) => (
-                             <div key={i} className="border p-1 text-[9px] flex justify-between items-center bg-slate-50 rounded">
-                                <span className="font-medium">{s.from} &rarr; {s.to}</span> <span className="font-black">{s.amount.toFixed(2)} €</span>
+                             <div key={i} className="border p-2 text-xs flex justify-between items-center bg-slate-50 rounded">
+                                <span className="font-medium">{s.from} &rarr; {s.to}</span> <span className="font-black bg-slate-900 text-white px-2 py-0.5 rounded">{s.amount.toFixed(2)} €</span>
                              </div>
                           ))}
                        </div>
-                    ) : <p className="italic text-slate-500 text-[9px]">Vse poravnano.</p>}
+                    ) : <p className="italic text-slate-500 text-xs">Vse poravnano.</p>}
                  </div>
 
-                 {/* 4. Zgodovina */}
-                 <div className="mb-4">
-                    <h2>4. Zgodovina Transakcij</h2>
-                    <table className="w-full text-[8px] report-table">
+                 <div className="mb-6">
+                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">4. Transakcije</h3>
+                    <table className="w-full text-[9px] report-table">
                        <thead>
                           <tr className="bg-slate-100">
-                             <th className="w-14">Datum</th>
+                             <th className="w-16">Datum</th>
                              <th>Opis</th>
-                             <th className="w-10 text-right">Znesek</th>
+                             <th className="w-12 text-right">Znesek</th>
                              {members.map(m => <th key={m} className="text-center w-6">{m.substring(0,2)}</th>)}
                           </tr>
                        </thead>
                        <tbody>
                           {history.filter(e => e.type !== 'adjustment').map(e => (
-                             <tr key={e.id}>
+                             <tr key={e.id} className="avoid-break">
                                 <td>{new Date(e.date).toLocaleDateString('sl-SI')}</td>
-                                <td>{e.opis}</td>
+                                <td className="truncate max-w-[100px]">{e.opis}</td>
                                 <td className="text-right font-bold">{e.amount.toFixed(2)}</td>
                                 {members.map(m => {
                                    const p = getMatrixValue(e, m, 'P');
                                    const s = getMatrixValue(e, m, 'S');
                                    return (
-                                      <td key={m} className="text-center text-[7px]">
-                                         {p > 0 && <span className="text-emerald-700 font-bold block">P:{Math.round(p)}</span>}
-                                         {s > 0 && <span className="text-rose-500 block">S:-{Math.round(s)}</span>}
+                                      <td key={m} className="text-center">
+                                         {p > 0 && <div className="text-emerald-600 font-bold">{Math.round(p)}</div>}
+                                         {s > 0 && <div className="text-rose-400">-{Math.round(s)}</div>}
                                       </td>
                                    )
                                 })}
@@ -517,107 +616,353 @@
                        </tbody>
                     </table>
                  </div>
-
-                 {/* 5. Vizualne Matrike (P in S) - NOVO */}
-                 <div className="page-break">
-                    <h2>5. Matrike: Plačila (P) in Poraba (S)</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Matrika P */}
-                        <div>
-                            <h4 className="text-[10px] font-bold text-center mb-1">Matrika P (Plačila)</h4>
-                            <table className="w-full text-[7px] report-table">
-                                <thead><tr><th>Datum</th>{members.map(m=> <th key={m}>{m.substring(0,2)}</th>)}</tr></thead>
-                                <tbody>
-                                    {history.filter(e => e.type !== 'adjustment').reverse().map(e => (
-                                        <tr key={'p'+e.id}>
-                                            <td className="truncate max-w-[40px]">{e.opis.substring(0,6)}</td>
-                                            {members.map(m => <td key={m} className="text-right">{getMatrixValue(e,m,'P') > 0 ? getMatrixValue(e,m,'P').toFixed(0) : '-'}</td>)}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        {/* Matrika S */}
-                        <div>
-                            <h4 className="text-[10px] font-bold text-center mb-1">Matrika S (Poraba)</h4>
-                            <table className="w-full text-[7px] report-table">
-                                <thead><tr><th>Datum</th>{members.map(m=> <th key={m}>{m.substring(0,2)}</th>)}</tr></thead>
-                                <tbody>
-                                    {history.filter(e => e.type !== 'adjustment').reverse().map(e => (
-                                        <tr key={'s'+e.id}>
-                                            <td className="truncate max-w-[40px]">{e.opis.substring(0,6)}</td>
-                                            {members.map(m => <td key={m} className="text-right">{getMatrixValue(e,m,'S') > 0 ? getMatrixValue(e,m,'S').toFixed(0) : '-'}</td>)}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                 </div>
-
-                 {/* 6. MATLAB KODA - NOVO */}
-                 <div className="page-break">
-                    <h2>6. Podatki v MATLAB obliki</h2>
-                    <p className="text-[8px] text-slate-500 mb-1">Kopirajte spodnjo kodo v Matlab. Vsebuje vektor Z in matriki P ter S.</p>
+                 
+                 <div className="avoid-break page-break">
+                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">5. Matlab Izvoz</h3>
+                    <p className="text-[9px] text-slate-500 mb-2">Kopirajte spodnjo kodo in jo prilepite neposredno v Matlab za nadaljnjo analizo.</p>
                     <div className="code-block">
                         {getMatlabCode()}
                     </div>
                  </div>
               </div>
 
-              {/* --- MAIN UI --- */}
               <header className="bg-gradient-to-br from-indigo-700 to-indigo-900 text-white p-6 rounded-b-[2.5rem] shadow-xl mb-6 print:hidden text-center relative overflow-hidden">
                 <h1 className="text-2xl font-bold flex items-center justify-center gap-2 relative z-10"><Wallet className="text-indigo-200" /> Malica Manager</h1>
                 <div className="flex items-center justify-center gap-2 mt-1"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div><p className="text-indigo-200 text-[10px] uppercase tracking-widest opacity-80">Cloud Sync Active</p></div>
               </header>
 
               <main className="max-w-md mx-auto px-4 print:hidden">
-                  {activeTab === 'dashboard' && (
+              
+                {activeTab === 'dashboard' && (
                   <div className="space-y-6 animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl shadow-lg border border-white text-center">
                       <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Naslednji plača</p>
                       <h2 className="text-4xl font-black text-indigo-900 mb-2">{payerRanking[0] || "Dodaj člana"}</h2>
-                      {payerRanking[0] && ( <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-1.5 rounded-full text-sm font-bold text-slate-600">Bilanca: {balances[payerRanking[0]]?.toFixed(2)} €</div> )}
+                      {payerRanking[0] && (
+                        <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-1.5 rounded-full text-sm font-bold text-slate-600">
+                          Bilanca: {balances[payerRanking[0]]?.toFixed(2)} €
+                        </div>
+                      )}
                     </div>
+
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                      <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><ListOrdered size={18} className="text-indigo-500" /> Vrstni red</h3></div>
+                      <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-700 flex items-center gap-2"><ListOrdered size={18} className="text-indigo-500" /> Vrstni red</h3>
+                      </div>
                       <div className="divide-y divide-slate-50">
                         {payerRanking.map((m, idx) => (
                           <div key={m} className={`p-4 flex justify-between items-center ${idx === 0 ? 'bg-indigo-50/30' : ''}`}>
-                            <div className="flex items-center gap-3"><span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{idx + 1}</span><span className="font-bold text-slate-700">{m}</span></div>
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{idx + 1}</span>
+                              <span className="font-bold text-slate-700">{m}</span>
+                            </div>
                             <span className={`font-bold tabular-nums ${balances[m] >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{balances[m] >= 0 ? '+' : ''}{balances[m].toFixed(2)} €</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     
-                    <button onClick={handlePrintReport} disabled={isGeneratingPdf} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                          {isGeneratingPdf ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} 
-                          {isGeneratingPdf ? 'Ustvari Full PDF Poročilo' : 'Shrani PDF (Vse matrike)'}
+                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          <Printer size={18} /> Shrani PDF Poročilo
                     </button>
-                    <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all"><Grid size={18} /> Prikaži Matriko (UI)</button>
+                    
+                    <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all">
+                       <Grid size={18} /> Prikaži Matriko (P/S)
+                    </button>
                   </div>
                 )}
-                
-                {/* PREOSTALI TABI (MATRIX, ADD, HISTORY, SETTLE, SETTINGS) SO IDENTIČNI PREJŠNJI VERZIJI, ZATO JIH TUKAJ ZARADI DOLŽINE NE PODVAJAM, SAJ JE ZAHTEVA BILA LE POPRAVEK PDF-A. */}
-                {/* Če potrebuješ celotno kodo za copy-paste brez manjkajočih delov, mi povej, in združim vse skupaj. Spodaj je samo placeholder za navigacijo, da koda deluje. */}
 
                 {activeTab === 'matrix' && (
-                   <div className="space-y-4 animate-fade-in"><div className="text-center p-10 text-slate-400">Tukaj pride pogled matrike (glej prejšnjo kodo)...</div><button onClick={() => setActiveTab('dashboard')} className="text-indigo-600 font-bold">Nazaj</button></div>
-                )}
-                {activeTab === 'add' && (
-                   <div className="space-y-4 animate-fade-in"><div className="text-center p-10 text-slate-400">Tukaj pride dodajanje računa...</div><button onClick={() => setActiveTab('dashboard')} className="text-indigo-600 font-bold">Nazaj</button></div>
-                )}
-                 {activeTab === 'history' && (
-                   <div className="space-y-4 animate-fade-in"><div className="text-center p-10 text-slate-400">Tukaj pride zgodovina...</div><button onClick={() => setActiveTab('dashboard')} className="text-indigo-600 font-bold">Nazaj</button></div>
-                )}
-                 {activeTab === 'settle' && (
-                   <div className="space-y-4 animate-fade-in"><div className="text-center p-10 text-slate-400">Tukaj pride obračun...</div><button onClick={() => setActiveTab('dashboard')} className="text-indigo-600 font-bold">Nazaj</button></div>
-                )}
-                 {activeTab === 'settings' && (
-                   <div className="space-y-4 animate-fade-in"><div className="text-center p-10 text-slate-400">Tukaj pridejo nastavitve...</div><button onClick={() => setActiveTab('dashboard')} className="text-indigo-600 font-bold">Nazaj</button></div>
+                   <div className="space-y-4 animate-fade-in">
+                      <div className="flex justify-between items-center px-1">
+                         <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Grid className="text-indigo-600" /> Matrike</h3>
+                         <div className="flex bg-slate-200 p-1 rounded-lg">
+                            <button onClick={() => setMatrixType('P')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'P' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}`}>Plačila</button>
+                            <button onClick={() => setMatrixType('S')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'S' ? 'bg-white shadow text-rose-600' : 'text-slate-500'}`}>Poraba</button>
+                            <button onClick={() => setMatrixType('Z')} className={`px-4 py-1 rounded-md text-xs font-bold transition-all ${matrixType === 'Z' ? 'bg-white shadow text-emerald-600' : 'text-slate-500'}`}>Začetno</button>
+                         </div>
+                      </div>
+                      
+                      <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                         <div className="overflow-x-auto custom-scrollbar pb-2">
+                            <table className="w-full text-xs whitespace-nowrap">
+                               <thead>
+                                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                                     <th className="p-3 text-left font-bold text-slate-400">Datum</th>
+                                     {members.map(m => (
+                                        <th key={m} className="p-3 text-right font-bold text-slate-600">{m.substring(0,3)}</th>
+                                     ))}
+                                     <th className="p-3 text-right font-black text-slate-800">Σ</th>
+                                  </tr>
+                               </thead>
+                               <tbody>
+                                  {matrixType === 'Z' && (() => {
+                                     const adjustments = history.filter(e => e.type === 'adjustment');
+                                     
+                                     const rowSum = members.reduce((sum, m) => {
+                                         const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                         return sum + val;
+                                     }, 0);
+
+                                     return (
+                                         <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
+                                             <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
+                                                 Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
+                                             </td>
+                                             {members.map(m => {
+                                                 const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                                 return (
+                                                     <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
+                                                         {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
+                                                     </td>
+                                                 );
+                                             })}
+                                             <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
+                                                 {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
+                                             </td>
+                                         </tr>
+                                     );
+                                  })()}
+
+                                  {history.map(entry => {
+                                     if (matrixType === 'Z') {
+                                          return null;
+                                     } else {
+                                          if (entry.type === 'adjustment') return null;
+                                     }
+
+                                     const rowSum = members.reduce((sum, m) => sum + getMatrixValue(entry, m, matrixType), 0);
+                                     return (
+                                        <tr key={entry.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                           <td className="p-3 text-slate-500 font-medium border-r border-slate-50">{new Date(entry.date).toLocaleDateString('sl-SI', {day:'numeric', month:'numeric'})} <span className="text-[9px] text-slate-300 ml-1">{entry.opis.substring(0,8)}</span></td>
+                                           {members.map(m => {
+                                              const val = getMatrixValue(entry, m, matrixType);
+                                              return (
+                                                 <td key={m} className={`p-3 text-right tabular-nums ${val !== 0 ? (matrixType==='S' ? 'text-rose-500' : (matrixType==='Z' ? (val>0?'text-emerald-600':'text-rose-500') : 'text-indigo-600 font-bold')) : 'text-slate-200'}`}>
+                                                    {val !== 0 ? val.toFixed(1) : '-'}
+                                                 </td>
+                                              )
+                                           })}
+                                           <td className="p-3 text-right font-bold text-slate-800 bg-slate-50/30">{rowSum.toFixed(1)}</td>
+                                        </tr>
+                                     )
+                                  })}
+                               </tbody>
+                               <tfoot>
+                                  <tr className="bg-slate-100 font-black text-slate-700">
+                                     <td className="p-3">SKUPAJ</td>
+                                     {members.map(m => {
+                                        const colSum = history.reduce((sum, e) => {
+                                            if (matrixType === 'Z') {
+                                                 if (e.type === 'adjustment') {
+                                                     return sum + (e.user === m ? (parseFloat(e.amount) || 0) : 0);
+                                                 }
+                                                 return sum;
+                                            } else {
+                                                 if (e.type === 'adjustment') return sum;
+                                                 return sum + getMatrixValue(e, m, matrixType);
+                                            }
+                                        }, 0);
+                                        return <td key={m} className="p-3 text-right">{colSum.toFixed(1)}</td>
+                                     })}
+                                     <td className="p-3 text-right">
+                                        {history.reduce((tot, e) => {
+                                            if (matrixType === 'Z') {
+                                                if (e.type !== 'adjustment') return tot;
+                                            } else {
+                                                if (e.type === 'adjustment') return tot;
+                                            }
+                                            return tot + parseFloat(e.amount || 0);
+                                        }, 0).toFixed(1)}
+                                     </td>
+                                  </tr>
+                               </tfoot>
+                            </table>
+                         </div>
+                      </div>
+                      
+                      <button onClick={handlePrintReport} className="w-full mt-4 py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                         <Printer size={18} /> Shrani PDF Poročilo
+                      </button>
+                   </div>
                 )}
 
+                {activeTab === 'add' && (
+                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><PlusCircle className="text-indigo-600" /> Nov račun</h3>
+                    <form onSubmit={addEntry} className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Opis</label><input type="text" id="opis-input" placeholder="Spar, Pizza..." className="w-full p-3 bg-slate-50 rounded-xl outline-none" /></div>
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Datum</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl outline-none" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Znesek (€)</label><input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl font-bold text-lg outline-none" placeholder="0.00" /></div>
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Plačnik</label><select value={payer} onChange={e => setPayer(e.target.value)} className="w-full p-3 bg-slate-50 rounded-xl font-bold text-indigo-900 outline-none">{members.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+                      </div>
+
+                      <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
+                        <button type="button" onClick={() => setSplitType('equal')} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${splitType === 'equal' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Enakomerno</button>
+                        <button type="button" onClick={() => setSplitType('manual')} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${splitType === 'manual' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Po porabi</button>
+                      </div>
+
+                      <div className="flex justify-end px-1 pt-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setSelectedParticipants(selectedParticipants.length === members.length ? [] : [...members])}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-2 py-2"
+                        >
+                            {selectedParticipants.length === members.length ? (
+                                <CheckSquare size={18} />
+                            ) : (
+                                <Square size={18} />
+                            )}
+                            <span className="uppercase tracking-wider">Vsi</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {members.map(m => {
+                          const sel = selectedParticipants.includes(m);
+                          return (
+                            <div 
+                                key={m} 
+                                onClick={() => setSelectedParticipants(prev => prev.includes(m) ? prev.filter(p => p !== m) : [...prev, m])}
+                                className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${sel ? 'bg-indigo-50/50 border-indigo-100 shadow-sm' : 'border-slate-50 hover:bg-slate-50'}`}
+                            >
+                              <span className={`flex-1 text-sm font-bold ${sel ? 'text-slate-800' : 'text-slate-400'}`}>{m}</span>
+                              
+                              {splitType === 'manual' && sel ? (
+                                <div onClick={e => e.stopPropagation()}>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        placeholder="0.00" 
+                                        value={manualAmounts[m] || ''} 
+                                        onChange={e => setManualAmounts({...manualAmounts, [m]: e.target.value})} 
+                                        className="w-20 p-1 bg-white border rounded text-right text-xs font-bold" 
+                                    />
+                                </div>
+                              ) : (
+                                sel && <CheckCircle2 size={16} className="text-indigo-600" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {splitType === 'manual' && (
+                          <div className={`p-3 rounded-xl text-center text-xs font-bold ${isManualBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                             Vsota: {Object.values(manualAmounts).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € / {parseFloat(amount||0).toFixed(2)} €
+                          </div>
+                      )}
+
+                      <button type="submit" disabled={!amount || selectedParticipants.length === 0 || (splitType === 'manual' && !isManualBalanced)} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl disabled:opacity-30">SHRANI RAČUN</button>
+                    </form>
+                  </div>
+                )}
+
+                {activeTab === 'history' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 px-2"><History className="text-indigo-600" /> Zgodovina</h3>
+                    <div className="space-y-3">
+                      {history.map(e => (
+                        <div key={e.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group flex justify-between items-start">
+                           <div className="flex gap-3">
+                              <div className="bg-slate-50 w-10 h-10 rounded-xl flex items-center justify-center flex-col text-slate-400 font-bold">
+                                 <span className="text-[8px] uppercase">{new Date(e.date).toLocaleString('sl-SI', {month:'short'})}</span>
+                                 <span className="text-sm leading-none">{new Date(e.date).getDate()}</span>
+                              </div>
+                              <div className="flex-1 min-w-0 pr-2">
+                                 <p className="text-sm font-bold text-slate-700">{e.payer} <span className="text-xs font-normal text-slate-400">je plačal</span></p>
+                                 <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] font-bold text-slate-500">{e.opis}</span>
+                                    <span className="text-[10px] text-slate-400 leading-tight">
+                                       {e.participants && e.participants.length > 0 ? e.participants.join(', ') : 'Ni udeležencev'}
+                                    </span>
+                                 </div>
+                              </div>
+                           </div>
+                           <div className="text-right shrink-0">
+                              <p className="font-black text-slate-800">{e.amount.toFixed(2)} €</p>
+                              {/* POPRAVLJENO BRISANJE: Gumb odpira modal */}
+                              <button onClick={(event) => confirmDeleteEntry(e.id, event)} className="p-2 -mr-2 text-rose-300 hover:text-rose-500 transition-colors mt-1"><Trash2 size={16} /></button>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'settle' && (
+                  <div className="space-y-6 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calculator className="text-indigo-600" /> Obračun</h3>
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-100 space-y-4">
+                      {settlements.length > 0 ? settlements.map((s, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                           <div className="flex-1 text-center bg-rose-50 rounded-xl p-2 font-bold text-xs">{s.from}</div>
+                           <div className="text-center min-w-[60px]"><p className="text-[10px] font-black bg-slate-800 text-white px-2 py-0.5 rounded-full">{s.amount.toFixed(2)} €</p><ArrowRightCircle size={14} className="mx-auto text-slate-200 mt-1" /></div>
+                           <div className="flex-1 text-center bg-emerald-50 rounded-xl p-2 font-bold text-xs">{s.to}</div>
+                        </div>
+                      )) : <div className="text-center py-10 text-slate-300 italic">Vse je poravnano!</div>}
+                    </div>
+                    
+                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          <Printer size={18} /> Shrani PDF Poročilo
+                    </button>
+
+                    {showResetConfirm ? (
+                       <div className="bg-white border-2 border-indigo-500 p-6 rounded-3xl shadow-2xl space-y-6">
+                          
+                          {/* SPREMENJENO ZGLAVJE IN GUMB */}
+                          <div className="flex justify-between items-center mb-2">
+                             <h4 className="font-black text-indigo-900 flex items-center gap-2"><RefreshCcw size={20} /> Resetiraj</h4>
+                             <button onClick={() => setManualStartBalances({...balances})} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-indigo-100 transition-all border border-indigo-100">
+                                <ArrowDownCircle size={14} /> Prenesi stanja
+                             </button>
+                          </div>
+                          <p className="text-xs text-slate-400 -mt-4 mb-2">Vpiši ali prenesi končna stanja v novo obdobje.</p>
+
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                             {members.map(m => (
+                                <div key={m} className="flex justify-between items-center gap-4 bg-slate-50 p-2 rounded-xl">
+                                   <span className="text-sm font-bold text-slate-600">{m}</span>
+                                   <input type="number" step="0.01" placeholder="0.00" value={manualStartBalances[m] || ''} onChange={e => setManualStartBalances({...manualStartBalances, [m]: e.target.value})} className="w-24 p-2 rounded-lg border border-indigo-100 text-right font-black text-indigo-600" />
+                                </div>
+                             ))}
+                          </div>
+                          
+                          <div className={`p-3 rounded-2xl text-center text-xs font-bold ${isResetBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                             Vsota vseh stanj: {Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € (Mora biti 0)
+                          </div>
+                          <div className="flex gap-2">
+                             <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-slate-400 font-bold">Prekliči</button>
+                             <button disabled={!isResetBalanced || isResetting} onClick={finalizeReset} className="flex-[2] bg-indigo-600 text-white py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 disabled:opacity-20">{isResetting ? 'Brisanje...' : 'POTRDI IN ZAČNI'}</button>
+                          </div>
+                       </div>
+                    ) : (
+                      <button disabled={history.length === 0} onClick={startResetProcess} className="w-full bg-white border-2 border-slate-100 py-5 rounded-3xl font-black text-slate-600 flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"><RefreshCcw size={18} className="text-indigo-500" /> Zaključi obdobje</button>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'settings' && (
+                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 animate-fade-in">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><UserPlus className="text-indigo-600" /> Ekipa</h3>
+                    <div className="space-y-2 mb-6">
+                      {members.map(m => (
+                        <div key={m} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group transition-all hover:bg-white hover:shadow-sm">
+                           <span className="font-bold text-slate-600">{m}</span>
+                           {history.length === 0 && <button onClick={() => removeMember(m)} className="text-rose-200 hover:text-rose-500"><Trash2 size={16} /></button>}
+                        </div>
+                      ))}
+                    </div>
+                    {!showAddMember ? (
+                       <button onClick={() => setShowAddMember(true)} className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs">DODAJ ČLANA</button>
+                    ) : (
+                       <div className="flex gap-2"><input autoFocus type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="Ime..." className="flex-1 p-3 bg-slate-100 rounded-xl outline-none" onKeyDown={e => e.key === 'Enter' && addMember()} /><button onClick={addMember} className="bg-indigo-600 text-white px-6 rounded-xl font-black">DODAJ</button></div>
+                    )}
+                  </div>
+                )}
               </main>
 
               <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)] print:hidden z-50">
