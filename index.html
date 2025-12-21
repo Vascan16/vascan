@@ -61,7 +61,7 @@
        // OPOMBA: Tukaj sem prilagodil kodo, da deluje v Canvas okolju.
        // Ko boste to uporabili v svoji aplikaciji, lahko odkomentirate svoj originalni del spodaj.
         
-        /* VAŠ ORIGINALNI CONFIG (ODKOMENTIRAJTE IN UPORABITE TEGA, KO BOSTE DALI NA GITHUB PAGES):
+       VAŠ ORIGINALNI CONFIG (ODKOMENTIRAJTE IN UPORABITE TEGA, KO BOSTE DALI NA GITHUB PAGES):
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
           authDomain: "vascan16a.firebaseapp.com",
@@ -71,12 +71,12 @@
           appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
         };
         const appId = 'malica-manager-live-v1'; 
-        */
+        
 
         // CANVAS CONFIG (ZA PREVIEW TUKAJ):
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "demo-key", authDomain: "demo.firebaseapp.com", projectId: "demo-project"
-        };
+        // const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+        //     apiKey: "demo-key", authDomain: "demo.firebaseapp.com", projectId: "demo-project"
+        // };
         // Uporabimo globalni app ID ali fallback, če smo v demo načinu
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'malica-manager-demo';
 
