@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="sl">
 <head>
@@ -7,6 +6,8 @@
     <title>Malica Manager Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <script type="importmap">
     {
@@ -20,68 +21,9 @@
       }
     }
     </script>
-
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* CSS ZA TISK (OPTIMIZIRANO ZA iOS) */
-        @media print {
-            @page { margin: 1cm; size: A4; }
-            
-            html, body {
-                width: 100%;
-                height: 100%;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: visible !important;
-                background-color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            /* Skrijemo vse elemente vmesnika */
-            body > * { display: none !important; } /* Skrije React root (začasno) */
-            
-            /* Pokažemo samo React root, ampak skrivamo njegovo vsebino selektivno */
-            body > #root { 
-                display: block !important; 
-                height: auto !important; 
-                width: 100% !important; 
-                position: static !important;
-                overflow: visible !important;
-            }
-
-            /* Znotraj aplikacije skrijemo navigacijo, header, main in modale */
-            #root nav, 
-            #root header, 
-            #root main, 
-            #root .fixed { 
-                display: none !important; 
-            }
-
-            /* Prisilno pokažemo print container */
-            .print-container {
-                display: block !important;
-                position: static !important; /* Na iOS static deluje bolje kot absolute */
-                width: 100% !important;
-                height: auto !important;
-                overflow: visible !important;
-                font-family: sans-serif;
-                font-size: 10px;
-                color: black;
-                background: white;
-            }
-
-            /* Skrijemo scrollbare */
-            ::-webkit-scrollbar { display: none; }
-            
-            /* Prelomi strani */
-            .page-break { page-break-before: always; }
-            .avoid-break { page-break-inside: avoid; }
-        }
-        
-        .print-container { display: none; } /* Na ekranu skrito */
-
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -89,11 +31,32 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         
         /* Za lepši izgled tabele v poročilu */
-        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
-        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
+        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 6px 8px; }
+        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 10px; color: #475569; }
+        .report-table td { font-size: 10px; color: #1e293b; }
         
         /* Matlab code block style */
         .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- NOVI CSS ZA PDF GENERATOR --- */
+        /* To skrije element iz ekrana, ampak ga pusti v DOM-u, da ga html2pdf lahko prebere */
+        #pdf-hidden-container {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 800px; /* Fiksna širina za A4 izgled */
+            background-color: white;
+            padding: 40px;
+            font-family: sans-serif;
+            color: black;
+        }
+        
+        /* Vizualni popravki samo za PDF */
+        #pdf-hidden-container h1 { font-size: 24px; margin-bottom: 10px; }
+        #pdf-hidden-container h3 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
+        #pdf-hidden-container .pdf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -101,13 +64,13 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
-           Users, History, PlusCircle, Trash2, TrendingDown, 
-           CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
-           Wallet, Calculator, CheckCircle2, Download, 
-           AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X
+            Users, History, PlusCircle, Trash2, TrendingDown, 
+            CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
+            Wallet, Calculator, CheckCircle2, Download, 
+            AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X, Loader2
         } from 'lucide-react';
         
         import { initializeApp } from 'firebase/app';
@@ -124,7 +87,6 @@
           messagingSenderId: "103335922942",
           appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
         };
-
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -170,6 +132,9 @@
           const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
           const [splitType, setSplitType] = useState('equal');
           const [manualAmounts, setManualAmounts] = useState({});
+
+          // PDF LOADING STATE
+          const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
           // 1. AUTH
           useEffect(() => {
@@ -289,22 +254,26 @@
             return Math.abs(sum) < 0.01;
           }, [manualStartBalances]);
 
-          const autoBalanceReset = () => {
-             const currentSum = Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0);
-             if (Math.abs(currentSum) < 0.01) return;
-             const diff = -currentSum;
-             const count = members.length;
-             const split = diff / count;
-             const newBalances = { ...manualStartBalances };
-             members.forEach(m => {
-                const currentVal = parseFloat(newBalances[m]) || 0;
-                newBalances[m] = money(currentVal + split);
-             });
-             setManualStartBalances(newBalances);
-          };
-
+          // --- NOVA FUNKCIJA ZA GENERIRANJE PDF ---
           const handlePrintReport = () => {
-             window.print();
+             setIsGeneratingPdf(true);
+             const element = document.getElementById('pdf-hidden-container');
+             const opt = {
+               margin:       10,
+               filename:     `MalicaManager_${new Date().toISOString().split('T')[0]}.pdf`,
+               image:        { type: 'jpeg', quality: 0.98 },
+               html2canvas:  { scale: 2 },
+               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+             };
+
+             // Uporabi html2pdf knjižnico (globalno naloženo v head)
+             window.html2pdf().set(opt).from(element).save().then(() => {
+                 setIsGeneratingPdf(false);
+             }).catch(err => {
+                 console.error(err);
+                 setIsGeneratingPdf(false);
+                 alert("Napaka pri ustvarjanju PDF. Poskusi ponovno.");
+             });
           };
 
           const addEntry = async (e) => {
@@ -324,11 +293,11 @@
           };
 
           const confirmDeleteEntry = (id, event) => {
-             if (event) event.stopPropagation();
-             setPendingAction({ type: 'DELETE', payload: id });
-             setAdminPinInput('');
-             setAdminAuthError(false);
-             setShowAdminAuth(true);
+              if (event) event.stopPropagation();
+              setPendingAction({ type: 'DELETE', payload: id });
+              setAdminPinInput('');
+              setAdminAuthError(false);
+              setShowAdminAuth(true);
           };
 
           const performDeleteEntry = async () => {
@@ -342,29 +311,29 @@
           };
 
           const startResetProcess = () => {
-             setPendingAction({ type: 'RESET' });
-             setAdminPinInput('');
-             setAdminAuthError(false);
-             setShowAdminAuth(true);
+              setPendingAction({ type: 'RESET' });
+              setAdminPinInput('');
+              setAdminAuthError(false);
+              setShowAdminAuth(true);
           };
 
           const verifyAdminPin = () => {
-             if (adminPinInput === ADMIN_PIN) {
-                setShowAdminAuth(false);
-                if (pendingAction) {
-                    if (pendingAction.type === 'DELETE') {
-                        setEntryToDelete(pendingAction.payload);
-                    } else if (pendingAction.type === 'RESET') {
-                        const init = {};
-                        members.forEach(m => init[m] = 0);
-                        setManualStartBalances(init);
-                        setShowResetConfirm(true);
-                    }
-                }
-                setPendingAction(null);
-             } else {
-                setAdminAuthError(true);
-             }
+              if (adminPinInput === ADMIN_PIN) {
+                 setShowAdminAuth(false);
+                 if (pendingAction) {
+                     if (pendingAction.type === 'DELETE') {
+                         setEntryToDelete(pendingAction.payload);
+                     } else if (pendingAction.type === 'RESET') {
+                         const init = {};
+                         members.forEach(m => init[m] = 0);
+                         setManualStartBalances(init);
+                         setShowResetConfirm(true);
+                     }
+                 }
+                 setPendingAction(null);
+              } else {
+                 setAdminAuthError(true);
+              }
           };
 
           const finalizeReset = async () => {
@@ -405,48 +374,43 @@
           };
 
           const getMatrixValue = (entry, member, type) => {
-             if (type === 'Z') {
-                return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
-             }
-             if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
-             else {
-                if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
-                if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
-                return 0;
-             }
+              if (type === 'Z') {
+                 return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
+              }
+              if (type === 'P') return entry.payer === member ? (parseFloat(entry.amount) || 0) : 0;
+              else {
+                 if (entry.splitType === 'manual' && entry.manualAmounts) return parseFloat(entry.manualAmounts[member]) || 0;
+                 if (entry.participants && entry.participants.includes(member)) return (parseFloat(entry.amount) || 0) / entry.participants.length;
+                 return 0;
+              }
           };
 
           // GENERACIJA MATLAB KODE
           const getMatlabCode = () => {
-             const adjustments = history.filter(e => e.type === 'adjustment');
-             const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
-             
-             // 1. Člani
-             const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
-             
-             // 2. Začetno stanje
-             const zVector = members.map(m => {
-                 const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
-                 return val.toFixed(2);
-             }).join(', ');
-             const zStr = `Z = [${zVector}];`;
-             
-             // 3. Matrika Plačil (P) - vrstice so transakcije
-             const pRows = transactions.map(t => {
-                 return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
-             });
-             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
-             
-             // 4. Matrika Porabe (S) - vrstice so transakcije
-             const sRows = transactions.map(t => {
-                 return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
-             });
-             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
-             
-             // 5. Opisi in Datumi (Dodatno za kontekst)
-             const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
+              const adjustments = history.filter(e => e.type === 'adjustment');
+              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); 
+              
+              const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
+              
+              const zVector = members.map(m => {
+                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                  return val.toFixed(2);
+              }).join(', ');
+              const zStr = `Z = [${zVector}];`;
+              
+              const pRows = transactions.map(t => {
+                  return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
+              });
+              const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
+              
+              const sRows = transactions.map(t => {
+                  return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
+              });
+              const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
+              
+              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
+              return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
           };
 
           if (!isAuthenticated) return (
@@ -467,8 +431,8 @@
 
           return (
             <div className="min-h-screen bg-slate-50 pb-24 font-sans app-container">
-              
-              {showAdminAuth && (
+                    
+                {showAdminAuth && (
                 <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-slate-100 text-center">
                         <div className="flex justify-center mb-4">
@@ -476,27 +440,27 @@
                         </div>
                         <h3 className="text-xl font-black text-slate-800 mb-2">Varnostna koda</h3>
                         <p className="text-slate-500 text-xs mb-4">Za to akcijo je potreben administratorski PIN.</p>
-                        
+                                        
                         <input 
                             type="password" 
-                            autoFocus
+                            autoFocus 
                             value={adminPinInput} 
-                            onChange={e => setAdminPinInput(e.target.value)} 
+                            onChange={e => setAdminPinInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && verifyAdminPin()}
                             placeholder="••••" 
-                            className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2" 
-                        />
+                            className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2"
+                         />
                         {adminAuthError && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačen PIN!</p>}
-                        
+                                        
                         <div className="flex gap-2 mt-4">
                             <button onClick={() => { setShowAdminAuth(false); setPendingAction(null); }} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 rounded-xl">Prekliči</button>
                             <button onClick={verifyAdminPin} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Potrdi</button>
                         </div>
                     </div>
                 </div>
-              )}
+                )}
 
-              {entryToDelete && (
+                {entryToDelete && (
                  <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl border-2 border-slate-100">
                        <div className="flex justify-center mb-4">
@@ -510,19 +474,19 @@
                        </div>
                     </div>
                  </div>
-              )}
+                )}
 
-              {/* PRINT ONLY CONTAINER - Optimized for iOS */}
-              <div className="print-container p-8">
+              {/* --- HIDDEN PDF CONTAINER (Rendered off-screen) --- */}
+              <div id="pdf-hidden-container">
                  <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
-                    <h1 className="text-2xl font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
+                    <h1 className="font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
                     <p className="text-xs text-slate-500">Ustvarjeno: {new Date().toLocaleString('sl-SI')}</p>
                  </div>
 
                  {history.some(e => e.type === 'adjustment') && (
-                    <div className="mb-6 avoid-break">
-                       <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">1. Začetna Stanja</h3>
-                       <div className="grid grid-cols-4 gap-2">
+                    <div className="mb-6">
+                       <h3 className="font-bold uppercase">1. Začetna Stanja</h3>
+                       <div className="pdf-grid">
                           {history.filter(e => e.type === 'adjustment').map(e => (
                              <div key={e.id} className="border p-2 text-xs flex justify-between rounded bg-slate-50">
                                 <span>{e.user}</span> <span className="font-bold">{e.amount.toFixed(2)} €</span>
@@ -532,8 +496,8 @@
                     </div>
                  )}
 
-                 <div className="mb-6 avoid-break">
-                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">2. Povzetek Obdobja</h3>
+                 <div className="mb-6">
+                    <h3 className="font-bold uppercase">2. Povzetek Obdobja</h3>
                     <table className="w-full text-xs report-table">
                        <thead><tr className="bg-slate-100"><th>Član</th><th className="text-right">Vplačila (P)</th><th className="text-right">Poraba (S)</th><th className="text-right">Neto Stanje</th></tr></thead>
                        <tbody>
@@ -554,10 +518,10 @@
                     </table>
                  </div>
 
-                 <div className="mb-6 avoid-break">
-                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">3. Predlagan Poračun</h3>
+                 <div className="mb-6">
+                    <h3 className="font-bold uppercase">3. Predlagan Poračun</h3>
                     {settlements.length > 0 ? (
-                       <div className="grid grid-cols-2 gap-4">
+                       <div className="pdf-grid">
                           {settlements.map((s,i) => (
                              <div key={i} className="border p-2 text-xs flex justify-between items-center bg-slate-50 rounded">
                                 <span className="font-medium">{s.from} &rarr; {s.to}</span> <span className="font-black bg-slate-900 text-white px-2 py-0.5 rounded">{s.amount.toFixed(2)} €</span>
@@ -568,7 +532,7 @@
                  </div>
 
                  <div className="mb-6">
-                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">4. Transakcije</h3>
+                    <h3 className="font-bold uppercase">4. Transakcije</h3>
                     <table className="w-full text-[9px] report-table">
                        <thead>
                           <tr className="bg-slate-100">
@@ -580,9 +544,9 @@
                        </thead>
                        <tbody>
                           {history.filter(e => e.type !== 'adjustment').map(e => (
-                             <tr key={e.id} className="avoid-break">
+                             <tr key={e.id}>
                                 <td>{new Date(e.date).toLocaleDateString('sl-SI')}</td>
-                                <td className="truncate max-w-[100px]">{e.opis}</td>
+                                <td>{e.opis}</td>
                                 <td className="text-right font-bold">{e.amount.toFixed(2)}</td>
                                 {members.map(m => {
                                    const p = getMatrixValue(e, m, 'P');
@@ -599,10 +563,9 @@
                        </tbody>
                     </table>
                  </div>
-                 
-                 <div className="avoid-break page-break">
-                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">5. Matlab Izvoz</h3>
-                    <p className="text-[9px] text-slate-500 mb-2">Kopirajte spodnjo kodo in jo prilepite neposredno v Matlab za nadaljnjo analizo.</p>
+
+                 <div className="mb-6">
+                    <h3 className="font-bold uppercase">5. Matlab Izvoz</h3>
                     <div className="code-block">
                         {getMatlabCode()}
                     </div>
@@ -615,8 +578,7 @@
               </header>
 
               <main className="max-w-md mx-auto px-4 print:hidden">
-              
-                {activeTab === 'dashboard' && (
+                  {activeTab === 'dashboard' && (
                   <div className="space-y-6 animate-fade-in">
                     <div className="bg-white p-6 rounded-3xl shadow-lg border border-white text-center">
                       <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Naslednji plača</p>
@@ -645,8 +607,9 @@
                       </div>
                     </div>
                     
-                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                          <Printer size={18} /> Shrani PDF Poročilo
+                    <button onClick={handlePrintReport} disabled={isGeneratingPdf} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          {isGeneratingPdf ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} 
+                          {isGeneratingPdf ? 'Generiranje PDF...' : 'Shrani PDF Poročilo'}
                     </button>
                     
                     <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all">
@@ -681,7 +644,6 @@
                                <tbody>
                                   {matrixType === 'Z' && (() => {
                                       const adjustments = history.filter(e => e.type === 'adjustment');
-                                      
                                       const rowSum = members.reduce((sum, m) => {
                                           const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
                                           return sum + val;
@@ -736,26 +698,26 @@
                                      <td className="p-3">SKUPAJ</td>
                                      {members.map(m => {
                                         const colSum = history.reduce((sum, e) => {
-                                           if (matrixType === 'Z') {
+                                            if (matrixType === 'Z') {
                                                 if (e.type === 'adjustment') {
                                                     return sum + (e.user === m ? (parseFloat(e.amount) || 0) : 0);
                                                 }
                                                 return sum;
-                                           } else {
+                                            } else {
                                                 if (e.type === 'adjustment') return sum;
                                                 return sum + getMatrixValue(e, m, matrixType);
-                                           }
+                                            }
                                         }, 0);
                                         return <td key={m} className="p-3 text-right">{colSum.toFixed(1)}</td>
                                      })}
                                      <td className="p-3 text-right">
                                         {history.reduce((tot, e) => {
-                                           if (matrixType === 'Z') {
-                                               if (e.type !== 'adjustment') return tot;
-                                           } else {
-                                               if (e.type === 'adjustment') return tot;
-                                           }
-                                           return tot + parseFloat(e.amount || 0);
+                                            if (matrixType === 'Z') {
+                                                if (e.type !== 'adjustment') return tot;
+                                            } else {
+                                                if (e.type === 'adjustment') return tot;
+                                            }
+                                            return tot + parseFloat(e.amount || 0);
                                         }, 0).toFixed(1)}
                                      </td>
                                   </tr>
@@ -764,8 +726,9 @@
                          </div>
                       </div>
                       
-                      <button onClick={handlePrintReport} className="w-full mt-4 py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                         <Printer size={18} /> Shrani PDF Poročilo
+                      <button onClick={handlePrintReport} disabled={isGeneratingPdf} className="w-full mt-4 py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          {isGeneratingPdf ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} 
+                          {isGeneratingPdf ? 'Generiranje PDF...' : 'Shrani PDF Poročilo'}
                       </button>
                    </div>
                 )}
@@ -790,7 +753,7 @@
 
                       <div className="flex justify-end px-1 pt-2">
                         <button 
-                            type="button" 
+                            type="button"
                             onClick={() => setSelectedParticipants(selectedParticipants.length === members.length ? [] : [...members])}
                             className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-2 py-2"
                         >
@@ -813,17 +776,16 @@
                                 className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${sel ? 'bg-indigo-50/50 border-indigo-100 shadow-sm' : 'border-slate-50 hover:bg-slate-50'}`}
                             >
                               <span className={`flex-1 text-sm font-bold ${sel ? 'text-slate-800' : 'text-slate-400'}`}>{m}</span>
-                              
                               {splitType === 'manual' && sel ? (
                                 <div onClick={e => e.stopPropagation()}>
-                                    <input 
-                                        type="number" 
-                                        step="0.01" 
-                                        placeholder="0.00" 
-                                        value={manualAmounts[m] || ''} 
-                                        onChange={e => setManualAmounts({...manualAmounts, [m]: e.target.value})} 
-                                        className="w-20 p-1 bg-white border rounded text-right text-xs font-bold" 
-                                    />
+                                  <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    placeholder="0.00" 
+                                    value={manualAmounts[m] || ''} 
+                                    onChange={e => setManualAmounts({...manualAmounts, [m]: e.target.value})}
+                                    className="w-20 p-1 bg-white border rounded text-right text-xs font-bold"
+                                  />
                                 </div>
                               ) : (
                                 sel && <CheckCircle2 size={16} className="text-indigo-600" />
@@ -832,7 +794,6 @@
                           );
                         })}
                       </div>
-                      
                       {splitType === 'manual' && (
                          <div className={`p-3 rounded-xl text-center text-xs font-bold ${isManualBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                             Vsota: {Object.values(manualAmounts).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € / {parseFloat(amount||0).toFixed(2)} €
@@ -860,14 +821,13 @@
                                  <div className="flex flex-col gap-0.5">
                                     <span className="text-[10px] font-bold text-slate-500">{e.opis}</span>
                                     <span className="text-[10px] text-slate-400 leading-tight">
-                                       {e.participants && e.participants.length > 0 ? e.participants.join(', ') : 'Ni udeležencev'}
+                                      {e.participants && e.participants.length > 0 ? e.participants.join(', ') : 'Ni udeležencev'}
                                     </span>
                                  </div>
                               </div>
                            </div>
                            <div className="text-right shrink-0">
                               <p className="font-black text-slate-800">{e.amount.toFixed(2)} €</p>
-                              {/* POPRAVLJENO BRISANJE: Gumb odpira modal */}
                               <button onClick={(event) => confirmDeleteEntry(e.id, event)} className="p-2 -mr-2 text-rose-300 hover:text-rose-500 transition-colors mt-1"><Trash2 size={16} /></button>
                            </div>
                         </div>
@@ -889,14 +849,13 @@
                       )) : <div className="text-center py-10 text-slate-300 italic">Vse je poravnano!</div>}
                     </div>
                     
-                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
-                         <Printer size={18} /> Shrani PDF Poročilo
+                    <button onClick={handlePrintReport} disabled={isGeneratingPdf} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          {isGeneratingPdf ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} 
+                          {isGeneratingPdf ? 'Generiranje PDF...' : 'Shrani PDF Poročilo'}
                     </button>
 
                     {showResetConfirm ? (
                        <div className="bg-white border-2 border-indigo-500 p-6 rounded-3xl shadow-2xl space-y-6">
-                          
-                          {/* SPREMENJENO ZGLAVJE IN GUMB */}
                           <div className="flex justify-between items-center mb-2">
                              <h4 className="font-black text-indigo-900 flex items-center gap-2"><RefreshCcw size={20} /> Resetiraj</h4>
                              <button onClick={() => setManualStartBalances({...balances})} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-indigo-100 transition-all border border-indigo-100">
@@ -913,7 +872,6 @@
                                 </div>
                              ))}
                           </div>
-                          
                           <div className={`p-3 rounded-2xl text-center text-xs font-bold ${isResetBalanced ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                              Vsota vseh stanj: {Object.values(manualStartBalances).reduce((a,b)=>a+(parseFloat(b)||0), 0).toFixed(2)} € (Mora biti 0)
                           </div>
