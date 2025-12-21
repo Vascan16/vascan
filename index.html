@@ -23,16 +23,55 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
+        /* CSS ZA TISK (OPTIMIZIRANO ZA iOS) */
         @media print {
             @page { margin: 1cm; size: A4; }
-            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 10px; font-family: sans-serif; }
             
-            /* Agresivno skrivanje vsega razen reporta za hitrejši render na iOS */
-            body > *:not(#root) { display: none !important; }
-            #root > *:not(.print-container) { display: none !important; }
-            .print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; height: auto; z-index: 9999; background: white; }
+            html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background-color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            /* Skrijemo vse elemente vmesnika */
+            body > * { display: none !important; } /* Skrije React root (začasno) */
             
-            /* Skrijemo scrollbare na printu */
+            /* Pokažemo samo React root, ampak skrivamo njegovo vsebino selektivno */
+            body > #root { 
+                display: block !important; 
+                height: auto !important; 
+                width: 100% !important; 
+                position: static !important;
+                overflow: visible !important;
+            }
+
+            /* Znotraj aplikacije skrijemo navigacijo, header, main in modale */
+            #root nav, 
+            #root header, 
+            #root main, 
+            #root .fixed { 
+                display: none !important; 
+            }
+
+            /* Prisilno pokažemo print container */
+            .print-container {
+                display: block !important;
+                position: static !important; /* Na iOS static deluje bolje kot absolute */
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                font-family: sans-serif;
+                font-size: 10px;
+                color: black;
+                background: white;
+            }
+
+            /* Skrijemo scrollbare */
             ::-webkit-scrollbar { display: none; }
             
             /* Prelomi strani */
@@ -40,14 +79,13 @@
             .avoid-break { page-break-inside: avoid; }
         }
         
-        .print-container { display: none; } /* Skrito na ekranu */
+        .print-container { display: none; } /* Na ekranu skrito */
 
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         /* Za lepši izgled tabele v poročilu */
         .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
@@ -75,7 +113,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
 
-        // --- KONFIGURACIJA ZA GITHUB PAGES ---
+       // --- KONFIGURACIJA ZA GITHUB PAGES ---
         // 1. KORAK: Kopiraj te podatke iz Firebase Console (Project Settings -> General -> Your apps)
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
@@ -86,13 +124,11 @@
           appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
         };
 
-        // Inicializacija
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // 2. KORAK: Določi unikatno ime za svojo aplikacijo (to določa, kje se shranjujejo podatki v bazi)
-        // Lahko pustiš tako ali spremeniš v npr. 'malica-firma-xy'
         const appId = 'malica-manager-live-v1';
         
         const money = (val) => Math.round((val + Number.EPSILON) * 100) / 100;
@@ -134,7 +170,7 @@
           const [splitType, setSplitType] = useState('equal');
           const [manualAmounts, setManualAmounts] = useState({});
 
-          // 1. AUTH - POENOSTAVLJENO ZA GITHUB PAGES
+          // 1. AUTH
           useEffect(() => {
             const initAuth = async () => {
                 try {
@@ -429,7 +465,7 @@
           if (loading) return (<div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-400"><div className="text-center"><RefreshCcw className="animate-spin mx-auto mb-2" /><p className="font-bold">Nalaganje...</p></div></div>);
 
           return (
-            <div className="min-h-screen bg-slate-50 pb-24 print:pb-0 font-sans">
+            <div className="min-h-screen bg-slate-50 pb-24 font-sans app-container">
               
               {showAdminAuth && (
                 <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in">
