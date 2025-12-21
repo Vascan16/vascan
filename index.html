@@ -25,19 +25,36 @@
     <style>
         @media print {
             @page { margin: 1cm; size: A4; }
-            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
+            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 10px; font-family: sans-serif; }
+            
+            /* Agresivno skrivanje vsega razen reporta za hitrejši render na iOS */
+            body > *:not(#root) { display: none !important; }
+            #root > *:not(.print-container) { display: none !important; }
+            .print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; height: auto; z-index: 9999; background: white; }
+            
+            /* Skrijemo scrollbare na printu */
             ::-webkit-scrollbar { display: none; }
+            
+            /* Prelomi strani */
+            .page-break { page-break-before: always; }
+            .avoid-break { page-break-inside: avoid; }
         }
+        
+        .print-container { display: none; } /* Skrito na ekranu */
+
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 8px; }
-        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 10px; }
+        
+        /* Za lepši izgled tabele v poročilu */
+        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
+        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
+        
+        /* Matlab code block style */
+        .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -120,7 +137,6 @@
           // 1. AUTH - POENOSTAVLJENO ZA GITHUB PAGES
           useEffect(() => {
             const initAuth = async () => {
-                // Na GitHub Pages nimamo custom tokenov, zato uporabimo direktno anonimno prijavo
                 try {
                     await signInAnonymously(auth);
                 } catch (error) {
@@ -142,7 +158,6 @@
             const unsubMembers = onSnapshot(membersRef, (snapshot) => {
               const mList = snapshot.docs.map(doc => doc.data().name);
               if (mList.length === 0 && loading) {
-                // Začetni člani se ustvarijo le ob prvem zagonu baze
                 const defaults = ["Martin", "Mitja", "Pavel", "Matej", "Zala", "Stela"];
                 defaults.forEach(async (n) => await setDoc(doc(membersRef, n), { name: n }));
               } else {
@@ -364,6 +379,39 @@
              }
           };
 
+          // GENERACIJA MATLAB KODE
+          const getMatlabCode = () => {
+             const adjustments = history.filter(e => e.type === 'adjustment');
+             const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
+             
+             // 1. Člani
+             const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
+             
+             // 2. Začetno stanje
+             const zVector = members.map(m => {
+                 const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                 return val.toFixed(2);
+             }).join(', ');
+             const zStr = `Z = [${zVector}];`;
+             
+             // 3. Matrika Plačil (P) - vrstice so transakcije
+             const pRows = transactions.map(t => {
+                 return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
+             });
+             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
+             
+             // 4. Matrika Porabe (S) - vrstice so transakcije
+             const sRows = transactions.map(t => {
+                 return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
+             });
+             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
+             
+             // 5. Opisi in Datumi (Dodatno za kontekst)
+             const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
+
+             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
+          };
+
           if (!isAuthenticated) return (
               <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white font-sans">
                 <div className="max-w-xs w-full text-center space-y-8 animate-fade-in">
@@ -427,15 +475,16 @@
                  </div>
               )}
 
-              <div className="hidden print:block p-8 bg-white text-slate-900">
+              {/* PRINT ONLY CONTAINER - Optimized for iOS */}
+              <div className="print-container p-8">
                  <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
-                    <h1 className="text-3xl font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
-                    <p className="text-sm text-slate-500">Ustvarjeno: {new Date().toLocaleString('sl-SI')}</p>
+                    <h1 className="text-2xl font-black uppercase tracking-tight">Poročilo Malica Manager</h1>
+                    <p className="text-xs text-slate-500">Ustvarjeno: {new Date().toLocaleString('sl-SI')}</p>
                  </div>
 
                  {history.some(e => e.type === 'adjustment') && (
-                    <div className="mb-6">
-                       <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">1. Začetna Stanja (Prenos)</h3>
+                    <div className="mb-6 avoid-break">
+                       <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">1. Začetna Stanja</h3>
                        <div className="grid grid-cols-4 gap-2">
                           {history.filter(e => e.type === 'adjustment').map(e => (
                              <div key={e.id} className="border p-2 text-xs flex justify-between rounded bg-slate-50">
@@ -446,9 +495,9 @@
                     </div>
                  )}
 
-                 <div className="mb-6">
-                    <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">2. Povzetek Obdobja</h3>
-                    <table className="w-full text-sm report-table">
+                 <div className="mb-6 avoid-break">
+                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">2. Povzetek Obdobja</h3>
+                    <table className="w-full text-xs report-table">
                        <thead><tr className="bg-slate-100"><th>Član</th><th className="text-right">Vplačila (P)</th><th className="text-right">Poraba (S)</th><th className="text-right">Neto Stanje</th></tr></thead>
                        <tbody>
                           {members.map(m => {
@@ -468,35 +517,35 @@
                     </table>
                  </div>
 
-                 <div className="mb-6">
-                    <h3 className="font-bold text-lg mb-2 uppercase border-b border-slate-200">3. Predlagan Poračun</h3>
+                 <div className="mb-6 avoid-break">
+                    <h3 className="font-bold text-sm mb-2 uppercase border-b border-slate-200">3. Predlagan Poračun</h3>
                     {settlements.length > 0 ? (
                        <div className="grid grid-cols-2 gap-4">
                           {settlements.map((s,i) => (
-                             <div key={i} className="border p-3 text-sm flex justify-between items-center bg-slate-50 rounded">
+                             <div key={i} className="border p-2 text-xs flex justify-between items-center bg-slate-50 rounded">
                                 <span className="font-medium">{s.from} &rarr; {s.to}</span> <span className="font-black bg-slate-900 text-white px-2 py-0.5 rounded">{s.amount.toFixed(2)} €</span>
                              </div>
                           ))}
                        </div>
-                    ) : <p className="italic text-slate-500">Vse poravnano.</p>}
+                    ) : <p className="italic text-slate-500 text-xs">Vse poravnano.</p>}
                  </div>
 
-                 <div>
-                    <h3 className="font-bold text-lg mb-3 uppercase tracking-wider border-b pb-1">4. Transakcije</h3>
-                    <table className="w-full text-[10px] report-table">
+                 <div className="mb-6">
+                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">4. Transakcije</h3>
+                    <table className="w-full text-[9px] report-table">
                        <thead>
                           <tr className="bg-slate-100">
-                             <th className="w-20">Datum</th>
+                             <th className="w-16">Datum</th>
                              <th>Opis</th>
-                             <th className="w-16 text-right">Znesek</th>
-                             {members.map(m => <th key={m} className="text-center w-8">{m.substring(0,2)}</th>)}
+                             <th className="w-12 text-right">Znesek</th>
+                             {members.map(m => <th key={m} className="text-center w-6">{m.substring(0,2)}</th>)}
                           </tr>
                        </thead>
                        <tbody>
                           {history.filter(e => e.type !== 'adjustment').map(e => (
-                             <tr key={e.id}>
+                             <tr key={e.id} className="avoid-break">
                                 <td>{new Date(e.date).toLocaleDateString('sl-SI')}</td>
-                                <td className="truncate max-w-[120px]">{e.opis}</td>
+                                <td className="truncate max-w-[100px]">{e.opis}</td>
                                 <td className="text-right font-bold">{e.amount.toFixed(2)}</td>
                                 {members.map(m => {
                                    const p = getMatrixValue(e, m, 'P');
@@ -512,6 +561,14 @@
                           ))}
                        </tbody>
                     </table>
+                 </div>
+                 
+                 <div className="avoid-break page-break">
+                    <h3 className="font-bold text-sm mb-3 uppercase tracking-wider border-b pb-1">5. Matlab Izvoz</h3>
+                    <p className="text-[9px] text-slate-500 mb-2">Kopirajte spodnjo kodo in jo prilepite neposredno v Matlab za nadaljnjo analizo.</p>
+                    <div className="code-block">
+                        {getMatlabCode()}
+                    </div>
                  </div>
               </div>
 
