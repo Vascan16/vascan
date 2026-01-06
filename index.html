@@ -113,7 +113,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
 
-       // --- KONFIGURACIJA ZA GITHUB PAGES ---
+        // --- KONFIGURACIJA ZA GITHUB PAGES ---
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
           authDomain: "vascan16a.firebaseapp.com",
@@ -122,7 +122,6 @@
           messagingSenderId: "103335922942",
           appId: "1:103335922942:web:e96fb2ebf408e0f18569af"
         };
-
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -133,6 +132,7 @@
         const money = (val) => Math.round((val + Number.EPSILON) * 100) / 100;
         
         const ACCESS_CODE = "1243";
+        const EDIT_CODE = "8888"; // Koda za dodajanje
         const ADMIN_PIN = "0000";
 
         const App = () => {
@@ -305,11 +305,22 @@
              window.print();
           };
 
+          // --- GLAVNE AKCIJE S PREVERJANJEM KODE ---
+
+          // 1. ADD ENTRY
           const addEntry = async (e) => {
             e.preventDefault();
             if (!user || !amount || selectedParticipants.length === 0) return;
             if (splitType === 'manual' && !isManualBalanced) return;
 
+            // Trigger Auth
+            setPendingAction({ type: 'ADD' });
+            setAdminPinInput('');
+            setAdminAuthError(false);
+            setShowAdminAuth(true);
+          };
+
+          const performAddEntry = async () => {
             const ref = collection(db, 'artifacts', appId, 'public', 'data', 'history');
             const data = {
               date, payer, amount: parseFloat(amount), 
@@ -321,6 +332,7 @@
             setAmount(''); setManualAmounts({}); setActiveTab('history');
           };
 
+          // 2. DELETE ENTRY
           const confirmDeleteEntry = (id, event) => {
              if (event) event.stopPropagation();
              setPendingAction({ type: 'DELETE', payload: id });
@@ -339,6 +351,7 @@
             }
           };
 
+          // 3. RESET / NEW PERIOD
           const startResetProcess = () => {
              setPendingAction({ type: 'RESET' });
              setAdminPinInput('');
@@ -346,19 +359,52 @@
              setShowAdminAuth(true);
           };
 
+          // 4. ADD MEMBER
+          const addMember = async () => {
+            if (!user || !newMemberName.trim()) return;
+            setPendingAction({ type: 'ADD_MEMBER' });
+            setAdminPinInput('');
+            setAdminAuthError(false);
+            setShowAdminAuth(true);
+          };
+
+          const performAddMember = async () => {
+             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', newMemberName.trim()), { name: newMemberName.trim() });
+             setNewMemberName(''); setShowAddMember(false);
+          };
+
+          const removeMember = async (n) => {
+            if (!user) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', n));
+            setMemberToDelete(null);
+          };
+
           const verifyAdminPin = () => {
-             if (adminPinInput === ADMIN_PIN) {
+             const pin = adminPinInput;
+             const action = pendingAction?.type;
+             let valid = false;
+             
+             // Za brisanje in reset: samo ADMIN (0000)
+             if (action === 'DELETE' || action === 'RESET') {
+                if (pin === ADMIN_PIN) valid = true;
+             } 
+             // Za dodajanje (račun ali član): EDIT (8888) ali ADMIN (0000)
+             else if (action === 'ADD' || action === 'ADD_MEMBER') {
+                if (pin === EDIT_CODE || pin === ADMIN_PIN) valid = true;
+             }
+
+             if (valid) {
                 setShowAdminAuth(false);
-                if (pendingAction) {
-                    if (pendingAction.type === 'DELETE') {
-                        setEntryToDelete(pendingAction.payload);
-                    } else if (pendingAction.type === 'RESET') {
-                        const init = {};
-                        members.forEach(m => init[m] = 0);
-                        setManualStartBalances(init);
-                        setShowResetConfirm(true);
-                    }
+                if (action === 'DELETE') setEntryToDelete(pendingAction.payload);
+                else if (action === 'RESET') {
+                    const init = {};
+                    members.forEach(m => init[m] = 0);
+                    setManualStartBalances(init);
+                    setShowResetConfirm(true);
                 }
+                else if (action === 'ADD') performAddEntry();
+                else if (action === 'ADD_MEMBER') performAddMember();
+                
                 setPendingAction(null);
              } else {
                 setAdminAuthError(true);
@@ -385,18 +431,6 @@
             setActiveTab('dashboard');
           };
 
-          const addMember = async () => {
-            if (!user || !newMemberName.trim()) return;
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', newMemberName.trim()), { name: newMemberName.trim() });
-            setNewMemberName(''); setShowAddMember(false);
-          };
-
-          const removeMember = async (n) => {
-            if (!user) return;
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', n));
-            setMemberToDelete(null);
-          };
-
           const checkAccess = () => {
             if (inputCode === ACCESS_CODE) { setIsAuthenticated(true); setAuthError(false); }
             else { setAuthError(true); }
@@ -419,22 +453,22 @@
              const adjustments = history.filter(e => e.type === 'adjustment');
              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
              
+             // Header
+             const headerStr = `clc;\nclear all;\n`;
+
              // 1. Člani
              const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
              
-             // 2. Začetno stanje (Z)
+             // 2. Začetno stanje
              const zVector = members.map(m => {
-                 const val = adjustments.reduce((s, e) => s + (e.user === m ? parseFloat(e.amount) : 0), 0);
+                 const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
                  return val.toFixed(2);
              }).join(', ');
              const zStr = `Z = [${zVector}]; % Začetna stanja`;
              
              // 3. Matrika Plačil (P) - vrstice so transakcije
              const pRows = transactions.map(t => {
-                 return members.map(m => {
-                     const val = t.payer === m ? parseFloat(t.amount) : 0;
-                     return val.toFixed(2);
-                 }).join(', ');
+                 return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
              });
              const pStr = `P = [\n  ${pRows.join(';\n  ')}\n]; % Matrika Plačil (P)`;
              
@@ -444,29 +478,67 @@
              });
              const sStr = `S = [\n  ${sRows.join(';\n  ')}\n]; % Matrika Porabe (S)`;
              
-             // 5. Opisi in Datumi
+             // 5. Opisi in Datumi (Dodatno za kontekst)
              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-             // 6. LOGIKA IZRAČUNA (Dodano da deluje v Matlabu)
-             const calcStr = `
-% --- IZRAČUN ---
+             // 6. Algoritem za izračun in poračun
+             const algoStr = `
+% --- IZRAČUN BILANCE ---
 total_placila = sum(P, 1);
 total_poraba = sum(S, 1);
-koncno_stanje = Z + total_placila - total_poraba;
+stanje = Z + total_placila - total_poraba;
 
-% --- IZPIS REZULTATOV ---
+% --- IZPIS BILANCE ---
 fprintf('\\n----------------------------------\\n');
 fprintf(' KONČNO STANJE (Bilanca)\\n');
 fprintf('----------------------------------\\n');
 for i = 1:length(clani)
-    fprintf('%-10s: %8.2f EUR\\n', clani{i}, koncno_stanje(i));
+    fprintf('%-10s: %8.2f EUR\\n', clani{i}, stanje(i));
 end
 fprintf('----------------------------------\\n');
-fprintf('KONTROLA (Sum): %8.4f\\n', sum(koncno_stanje));
+fprintf('KONTROLA (Sum): %8.4f\\n', sum(stanje));
 fprintf('----------------------------------\\n');
+
+% --- ALGORITEM ZA PORAČUN (Debt Settlement) ---
+fprintf('\\nPREDLAGAN PORAČUN:\\n');
+dolzniki_idx = find(stanje < -0.01);
+upniki_idx = find(stanje > 0.01);
+
+% Sortiranje: Največji dolžniki in upniki prvi za minimizacijo transakcij
+[~, I_d] = sort(stanje(dolzniki_idx), 'ascend'); 
+dolzniki_idx = dolzniki_idx(I_d);
+
+[~, I_u] = sort(stanje(upniki_idx), 'descend');
+upniki_idx = upniki_idx(I_u);
+
+dolgovi = abs(stanje(dolzniki_idx));
+terjatve = stanje(upniki_idx);
+
+di = 1; ui = 1;
+
+while di <= length(dolzniki_idx) && ui <= length(upniki_idx)
+    znesek = min(dolgovi(di), terjatve(ui));
+    
+    if znesek > 0.005
+        d_ime = clani{dolzniki_idx(di)};
+        u_ime = clani{upniki_idx(ui)};
+        fprintf('%s -> %s: %.2f EUR\\n', d_ime, u_ime, znesek);
+    end
+    
+    dolgovi(di) = dolgovi(di) - znesek;
+    terjatve(ui) = terjatve(ui) - znesek;
+    
+    if dolgovi(di) < 0.01
+        di = di + 1;
+    end
+    
+    if terjatve(ui) < 0.01
+        ui = ui + 1;
+    end
+end
 `;
 
-             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}\n${calcStr}`;
+             return `${headerStr}\n${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}\n${algoStr}`;
           };
 
           if (!isAuthenticated) return (
@@ -495,7 +567,11 @@ fprintf('----------------------------------\\n');
                             <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Lock size={32} /></div>
                         </div>
                         <h3 className="text-xl font-black text-slate-800 mb-2">Varnostna koda</h3>
-                        <p className="text-slate-500 text-xs mb-4">Za to akcijo je potreben administratorski PIN.</p>
+                        <p className="text-slate-500 text-xs mb-4">
+                            {(pendingAction?.type === 'ADD' || pendingAction?.type === 'ADD_MEMBER') 
+                                ? 'Za to akcijo je potrebna koda za urejanje.' 
+                                : 'Za to akcijo je potreben administratorski PIN.'}
+                        </p>
                         
                         <input 
                             type="password" 
@@ -506,7 +582,7 @@ fprintf('----------------------------------\\n');
                             placeholder="••••" 
                             className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-indigo-500 mb-2" 
                         />
-                        {adminAuthError && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačen PIN!</p>}
+                        {adminAuthError && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačna koda!</p>}
                         
                         <div className="flex gap-2 mt-4">
                             <button onClick={() => { setShowAdminAuth(false); setPendingAction(null); }} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 rounded-xl">Prekliči</button>
@@ -609,8 +685,8 @@ fprintf('----------------------------------\\n');
                                    const s = getMatrixValue(e, m, 'S');
                                    return (
                                       <td key={m} className="text-center">
-                                         {p > 0 && <div className="text-emerald-600 font-bold">{p.toFixed(2)}</div>}
-                                         {s > 0 && <div className="text-rose-400">-{s.toFixed(2)}</div>}
+                                         {p > 0 && <div className="text-emerald-600 font-bold">{Math.round(p)}</div>}
+                                         {s > 0 && <div className="text-rose-400">-{Math.round(s)}</div>}
                                       </td>
                                    )
                                 })}
@@ -665,7 +741,9 @@ fprintf('----------------------------------\\n');
                       </div>
                     </div>
                     
-                    {/* GUMB JE ODSTRANJEN KOT ZAHTEVANO */}
+                    <button onClick={handlePrintReport} className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100">
+                          <Printer size={18} /> Shrani PDF Poročilo
+                    </button>
                     
                     <button onClick={() => setActiveTab('matrix')} className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-700 transition-all">
                        <Grid size={18} /> Prikaži Matriko (P/S)
@@ -698,38 +776,38 @@ fprintf('----------------------------------\\n');
                                </thead>
                                <tbody>
                                   {matrixType === 'Z' && (() => {
-                                     const adjustments = history.filter(e => e.type === 'adjustment');
-                                     
-                                     const rowSum = members.reduce((sum, m) => {
-                                         const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
-                                         return sum + val;
-                                     }, 0);
+                                      const adjustments = history.filter(e => e.type === 'adjustment');
+                                      
+                                      const rowSum = members.reduce((sum, m) => {
+                                          const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                          return sum + val;
+                                      }, 0);
 
-                                     return (
-                                        <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
-                                            <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
-                                                Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
-                                            </td>
-                                            {members.map(m => {
-                                                const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
-                                                return (
-                                                    <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
-                                                        {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
-                                                {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
-                                            </td>
-                                        </tr>
-                                     );
+                                      return (
+                                          <tr className="border-b-2 border-indigo-100 bg-indigo-50/30 text-xs">
+                                              <td className="p-3 font-bold text-indigo-900 border-r border-indigo-100">
+                                                  Začetno stanje <span className="block text-[9px] font-normal text-indigo-400">Prenos</span>
+                                              </td>
+                                              {members.map(m => {
+                                                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
+                                                  return (
+                                                      <td key={m} className={`p-3 text-right font-bold tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-400'}`}>
+                                                          {val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}
+                                                      </td>
+                                                  );
+                                              })}
+                                              <td className="p-3 text-right font-black text-indigo-900 bg-indigo-100/50">
+                                                  {rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}
+                                              </td>
+                                          </tr>
+                                      );
                                   })()}
 
                                   {history.map(entry => {
                                      if (matrixType === 'Z') {
-                                          return null;
+                                         return null;
                                      } else {
-                                          if (entry.type === 'adjustment') return null;
+                                         if (entry.type === 'adjustment') return null;
                                      }
 
                                      const rowSum = members.reduce((sum, m) => sum + getMatrixValue(entry, m, matrixType), 0);
@@ -754,26 +832,26 @@ fprintf('----------------------------------\\n');
                                      <td className="p-3">SKUPAJ</td>
                                      {members.map(m => {
                                         const colSum = history.reduce((sum, e) => {
-                                            if (matrixType === 'Z') {
-                                                 if (e.type === 'adjustment') {
-                                                     return sum + (e.user === m ? (parseFloat(e.amount) || 0) : 0);
-                                                 }
-                                                 return sum;
-                                            } else {
-                                                 if (e.type === 'adjustment') return sum;
-                                                 return sum + getMatrixValue(e, m, matrixType);
-                                            }
+                                           if (matrixType === 'Z') {
+                                                if (e.type === 'adjustment') {
+                                                    return sum + (e.user === m ? (parseFloat(e.amount) || 0) : 0);
+                                                }
+                                                return sum;
+                                           } else {
+                                                if (e.type === 'adjustment') return sum;
+                                                return sum + getMatrixValue(e, m, matrixType);
+                                           }
                                         }, 0);
                                         return <td key={m} className="p-3 text-right">{colSum.toFixed(1)}</td>
                                      })}
                                      <td className="p-3 text-right">
                                         {history.reduce((tot, e) => {
-                                            if (matrixType === 'Z') {
-                                                if (e.type !== 'adjustment') return tot;
-                                            } else {
-                                                if (e.type === 'adjustment') return tot;
-                                            }
-                                            return tot + parseFloat(e.amount || 0);
+                                           if (matrixType === 'Z') {
+                                               if (e.type !== 'adjustment') return tot;
+                                           } else {
+                                               if (e.type === 'adjustment') return tot;
+                                           }
+                                           return tot + parseFloat(e.amount || 0);
                                         }, 0).toFixed(1)}
                                      </td>
                                   </tr>
