@@ -493,9 +493,6 @@
              const adjustments = history.filter(e => e.type === 'adjustment');
              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
              
-             // Header
-             const headerStr = `clc;\nclear all;\n`;
-
              // 1. Člani
              const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
              
@@ -504,81 +501,24 @@
                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
                  return val.toFixed(2);
              }).join(', ');
-             const zStr = `Z = [${zVector}]; % Začetna stanja`;
+             const zStr = `Z = [${zVector}];`;
              
              // 3. Matrika Plačil (P) - vrstice so transakcije
              const pRows = transactions.map(t => {
                  return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
              });
-             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n]; % Matrika Plačil (P)`;
+             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
              
              // 4. Matrika Porabe (S) - vrstice so transakcije
              const sRows = transactions.map(t => {
                  return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
              });
-             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n]; % Matrika Porabe (S)`;
+             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
              
              // 5. Opisi in Datumi (Dodatno za kontekst)
              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-             // 6. Algoritem za izračun in poračun
-             const algoStr = `
-% --- IZRAČUN BILANCE ---
-total_placila = sum(P, 1);
-total_poraba = sum(S, 1);
-stanje = Z + total_placila - total_poraba;
-
-% --- IZPIS BILANCE ---
-fprintf('\\n----------------------------------\\n');
-fprintf(' KONČNO STANJE (Bilanca)\\n');
-fprintf('----------------------------------\\n');
-for i = 1:length(clani)
-    fprintf('%-10s: %8.2f EUR\\n', clani{i}, stanje(i));
-end
-fprintf('----------------------------------\\n');
-fprintf('KONTROLA (Sum): %8.4f\\n', sum(stanje));
-fprintf('----------------------------------\\n');
-
-% --- ALGORITEM ZA PORAČUN (Debt Settlement) ---
-fprintf('\\nPREDLAGAN PORAČUN:\\n');
-dolzniki_idx = find(stanje < -0.01);
-upniki_idx = find(stanje > 0.01);
-
-% Sortiranje: Največji dolžniki in upniki prvi za minimizacijo transakcij
-[~, I_d] = sort(stanje(dolzniki_idx), 'ascend'); 
-dolzniki_idx = dolzniki_idx(I_d);
-
-[~, I_u] = sort(stanje(upniki_idx), 'descend');
-upniki_idx = upniki_idx(I_u);
-
-dolgovi = abs(stanje(dolzniki_idx));
-terjatve = stanje(upniki_idx);
-
-di = 1; ui = 1;
-
-while di <= length(dolzniki_idx) && ui <= length(upniki_idx)
-    znesek = min(dolgovi(di), terjatve(ui));
-    
-    if znesek > 0.005
-        d_ime = clani{dolzniki_idx(di)};
-        u_ime = clani{upniki_idx(ui)};
-        fprintf('%s -> %s: %.2f EUR\\n', d_ime, u_ime, znesek);
-    end
-    
-    dolgovi(di) = dolgovi(di) - znesek;
-    terjatve(ui) = terjatve(ui) - znesek;
-    
-    if dolgovi(di) < 0.01
-        di = di + 1;
-    end
-    
-    if terjatve(ui) < 0.01
-        ui = ui + 1;
-    end
-end
-`;
-
-             return `${headerStr}\n${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}\n${algoStr}`;
+             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
           };
 
           if (!isAuthenticated) return (
