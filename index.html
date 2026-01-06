@@ -113,7 +113,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, writeBatch, getDocs, serverTimestamp } from 'firebase/firestore';
 
-        // --- KONFIGURACIJA ZA GITHUB PAGES ---
+        // --- KONFIGURACIJA (RESTORED ORIGINAL) ---
         const firebaseConfig = {
           apiKey: "AIzaSyCuf2iVBeCE8IrFEnOxa3IZt7jDgf3r_8w",
           authDomain: "vascan16a.firebaseapp.com",
@@ -133,7 +133,7 @@
         
         // --- KODE ZA DOSTOP ---
         const VIEW_CODE = "1243"; // Samo ogled
-        const EDIT_CODE = "8888"; // Dodajanje računov (NOVA KODA)
+        const EDIT_CODE = "8888"; // Dodajanje računov IN članov
         const ADMIN_CODE = "0000"; // Brisanje in reset
 
         const App = () => {
@@ -390,17 +390,19 @@
              const pin = adminPinInput;
              let success = false;
 
-             if (pendingAction.type === 'ADD') {
-                 // Za dodajanje velja EDIT ali ADMIN koda
+             // Za dejanja dodajanja (ADD in ADD_MEMBER) velja EDIT ali ADMIN koda
+             if (pendingAction.type === 'ADD' || pendingAction.type === 'ADD_MEMBER') {
                  if (pin === EDIT_CODE || pin === ADMIN_CODE) success = true;
-             } else if (pendingAction.type === 'DELETE' || pendingAction.type === 'RESET') {
-                 // Za brisanje samo ADMIN koda
+             } 
+             // Za brisanje/reset samo ADMIN koda
+             else if (pendingAction.type === 'DELETE' || pendingAction.type === 'RESET') {
                  if (pin === ADMIN_CODE) success = true;
              }
 
              if (success) {
                 setShowAdminAuth(false);
                 if (pendingAction.type === 'ADD') performAddEntry();
+                if (pendingAction.type === 'ADD_MEMBER') performAddMember();
                 if (pendingAction.type === 'DELETE') setEntryToDelete(pendingAction.payload);
                 if (pendingAction.type === 'RESET') initReset();
                 setPendingAction(null);
@@ -431,9 +433,24 @@
 
           const addMember = async () => {
             if (!user || !newMemberName.trim()) return;
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', newMemberName.trim()), { name: newMemberName.trim() });
-            setNewMemberName(''); setShowAddMember(false);
+            
+            // Check Access Level for Adding Member
+            if (accessLevel === 'view') {
+                setPendingAction({ type: 'ADD_MEMBER' });
+                setAdminPinInput('');
+                setAdminAuthError(false);
+                setShowAdminAuth(true);
+                return;
+            }
+            
+            await performAddMember();
           };
+
+          const performAddMember = async () => {
+             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', newMemberName.trim()), { name: newMemberName.trim() });
+             setNewMemberName('');
+             setShowAddMember(false);
+          }
 
           const removeMember = async (n) => {
             if (!user) return;
@@ -476,6 +493,9 @@
              const adjustments = history.filter(e => e.type === 'adjustment');
              const transactions = history.filter(e => e.type !== 'adjustment').reverse(); // Kronološko (najprej starejše)
              
+             // Header
+             const headerStr = `clc;\nclear all;\n`;
+
              // 1. Člani
              const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
              
@@ -484,24 +504,81 @@
                  const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0);
                  return val.toFixed(2);
              }).join(', ');
-             const zStr = `Z = [${zVector}];`;
+             const zStr = `Z = [${zVector}]; % Začetna stanja`;
              
              // 3. Matrika Plačil (P) - vrstice so transakcije
              const pRows = transactions.map(t => {
                  return members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ');
              });
-             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n];`;
+             const pStr = `P = [\n  ${pRows.join(';\n  ')}\n]; % Matrika Plačil (P)`;
              
              // 4. Matrika Porabe (S) - vrstice so transakcije
              const sRows = transactions.map(t => {
                  return members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ');
              });
-             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n];`;
+             const sStr = `S = [\n  ${sRows.join(';\n  ')}\n]; % Matrika Porabe (S)`;
              
              // 5. Opisi in Datumi (Dodatno za kontekst)
              const metaStr = `% Opisi transakcij:\n% ${transactions.map((t, i) => `${i+1}: ${t.date} - ${t.opis}`).join('\n% ')}`;
 
-             return `${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}`;
+             // 6. Algoritem za izračun in poračun
+             const algoStr = `
+% --- IZRAČUN BILANCE ---
+total_placila = sum(P, 1);
+total_poraba = sum(S, 1);
+stanje = Z + total_placila - total_poraba;
+
+% --- IZPIS BILANCE ---
+fprintf('\\n----------------------------------\\n');
+fprintf(' KONČNO STANJE (Bilanca)\\n');
+fprintf('----------------------------------\\n');
+for i = 1:length(clani)
+    fprintf('%-10s: %8.2f EUR\\n', clani{i}, stanje(i));
+end
+fprintf('----------------------------------\\n');
+fprintf('KONTROLA (Sum): %8.4f\\n', sum(stanje));
+fprintf('----------------------------------\\n');
+
+% --- ALGORITEM ZA PORAČUN (Debt Settlement) ---
+fprintf('\\nPREDLAGAN PORAČUN:\\n');
+dolzniki_idx = find(stanje < -0.01);
+upniki_idx = find(stanje > 0.01);
+
+% Sortiranje: Največji dolžniki in upniki prvi za minimizacijo transakcij
+[~, I_d] = sort(stanje(dolzniki_idx), 'ascend'); 
+dolzniki_idx = dolzniki_idx(I_d);
+
+[~, I_u] = sort(stanje(upniki_idx), 'descend');
+upniki_idx = upniki_idx(I_u);
+
+dolgovi = abs(stanje(dolzniki_idx));
+terjatve = stanje(upniki_idx);
+
+di = 1; ui = 1;
+
+while di <= length(dolzniki_idx) && ui <= length(upniki_idx)
+    znesek = min(dolgovi(di), terjatve(ui));
+    
+    if znesek > 0.005
+        d_ime = clani{dolzniki_idx(di)};
+        u_ime = clani{upniki_idx(ui)};
+        fprintf('%s -> %s: %.2f EUR\\n', d_ime, u_ime, znesek);
+    end
+    
+    dolgovi(di) = dolgovi(di) - znesek;
+    terjatve(ui) = terjatve(ui) - znesek;
+    
+    if dolgovi(di) < 0.01
+        di = di + 1;
+    end
+    
+    if terjatve(ui) < 0.01
+        ui = ui + 1;
+    end
+end
+`;
+
+             return `${headerStr}\n${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n\n${metaStr}\n${algoStr}`;
           };
 
           if (!isAuthenticated) return (
@@ -534,7 +611,7 @@
                         </div>
                         <h3 className="text-xl font-black text-slate-800 mb-2">Varnostna koda</h3>
                         <p className="text-slate-500 text-xs mb-4">
-                            {pendingAction?.type === 'ADD' 
+                            {(pendingAction?.type === 'ADD' || pendingAction?.type === 'ADD_MEMBER')
                                 ? 'Za shranjevanje potrebujete kodo za urejanje.' 
                                 : 'Za to akcijo je potreben administratorski PIN.'}
                         </p>
