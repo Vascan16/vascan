@@ -81,7 +81,7 @@
           ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X, 
           Crown, PiggyBank, Ghost, Medal, Dices, Eye, EyeOff, BarChart3, Pizza, Settings, Utensils, StickyNote, PenLine,
           PieChart as IconPieChart, Activity, Database, ArrowRight, Play, Pause, RotateCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Gamepad2, Moon, Sun,
-          Sigma, BookOpen, ShieldCheck, Clock
+          Sigma, BookOpen
         } from 'lucide-react';
         
         // --- RECHARTS IMPORTS ---
@@ -202,6 +202,16 @@
             }, 250);
         };
 
+        const triggerGoldBurst = () => {
+              confetti({
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.7 },
+                colors: ['#e4b00f', '#ffd700', '#fceeb5'],
+                disableForReducedMotion: true
+            });
+        };
+
         const getMatrixValue = (entry, member, type) => {
           if (type === 'Z') {
             return entry.type === 'adjustment' && entry.user === member ? (parseFloat(entry.amount) || 0) : 0;
@@ -276,10 +286,10 @@
           const zStr = `Z = [${zVector}]; % Začetna stanja`;
             
           const pRows = transactions.length > 0 ? transactions.map(t => members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ')) : [members.map(() => '0.00').join(', ')];
-          const pStr = `P = [\n  ${pRows.join(';\n  ')}\n]; % Matrika Plačil (P)`;
+          const pStr = `P = [\n  ${pRows.join(';\n   ')}\n]; % Matrika Plačil (P)`;
             
           const sRows = transactions.length > 0 ? transactions.map(t => members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ')) : [members.map(() => '0.00').join(', ')];
-          const sStr = `S = [\n  ${sRows.join(';\n  ')}\n]; % Matrika Porabe (S)`;
+          const sStr = `S = [\n  ${sRows.join(';\n   ')}\n]; % Matrika Porabe (S)`;
 
           const footerStr = `        % IZRAČUN KONČNIH BILANC\n        B = Z + sum(P, 1) - sum(S, 1);\n\n        fprintf('\\n--- KONČNA STANJA (Obračun) ---\\n');\n        for i = 1:length(clani)\n            fprintf('%s: %.2f €\\n', clani{i}, B(i));\n        end\n\n        fprintf('\\n--- PREDLAGAN PORAČUN (Navodila za poravnavo) ---\\n');\n        st_clanov = length(clani);\n        [stanja, idx] = sort(B); % Od največjega dolga do največjega upnika\n        upnik_kazalec = st_clanov;\n        dolznik_kazalec = 1;\n\n        while dolznik_kazalec < upnik_kazalec\n            if abs(stanja(dolznik_kazalec)) < 0.01\n                dolznik_kazalec = dolznik_kazalec + 1;\n                continue;\n            end\n            if abs(stanja(upnik_kazalec)) < 0.01\n                upnik_kazalec = upnik_kazalec - 1;\n                continue;\n            end\n            \n            znesek = min(abs(stanja(dolznik_kazalec)), stanja(upnik_kazalec));\n            if znesek > 0\n                fprintf('%s -> %s: %.2f €\\n', clani{idx(dolznik_kazalec)}, clani{idx(upnik_kazalec)}, znesek);\n                stanja(dolznik_kazalec) = stanja(dolznik_kazalec) + znesek;\n                stanja(upnik_kazalec) = stanja(upnik_kazalec) - znesek;\n            end\n            \n            if abs(stanja(dolznik_kazalec)) < 0.01, dolznik_kazalec = dolznik_kazalec + 1; end\n            if abs(stanja(upnik_kazalec)) < 0.01, upnik_kazalec = upnik_kazalec - 1; end\n        end\n        `;
 
@@ -338,6 +348,7 @@
                 <div className="p-6 bg-[#002f55] dark:bg-slate-950 text-white flex justify-between items-center shrink-0">
                   <h2 className="text-xl font-black flex items-center gap-2"><BarChart3 /> Statistika</h2>
                   <div className="flex items-center gap-1">
+                      {/* STEALTH GAME ICON */}
                       <button onClick={() => { onClose(); onOpenGame(); }} className="p-2 text-white/10 hover:text-white transition-colors duration-500 rounded-full">
                           <Sigma size={24} />
                       </button>
@@ -448,6 +459,7 @@
           );
         };
         
+        // --- NEW COMPONENT: INSTRUCTIONS EDIT MODAL ---
         const InstructionsEditModal = ({ show, instructions, setInstructions, onConfirm, onCancel }) => {
             if (!show) return null;
             return (
@@ -598,7 +610,7 @@
             const gameLoopRef = useRef(null);
             
             const GRID_COUNT = 20;
-            const CELL_SIZE = 15; 
+            const CELL_SIZE = 15; // Base size, scaled by canvas
             const FOODS = ['🍕', '🍔', '🍟', '🌮', '🍩', '🍎', '🍐', '🍌'];
 
             const startGame = () => {
@@ -642,11 +654,13 @@
                 head.x += dir.current.x;
                 head.y += dir.current.y;
 
+                // Collision with walls
                 if(head.x < 0 || head.x >= GRID_COUNT || head.y < 0 || head.y >= GRID_COUNT) {
                     handleGameOver();
                     return;
                 }
 
+                // Collision with self
                 if(snake.current.some(s => s.x === head.x && s.y === head.y)) {
                     handleGameOver();
                     return;
@@ -654,6 +668,7 @@
 
                 snake.current.unshift(head);
 
+                // Eat food
                 if(head.x === food.current.x && head.y === food.current.y) {
                     setScore(s => {
                         const newScore = s + 1;
@@ -692,9 +707,11 @@
                 const width = canvas.width;
                 const cellSize = width / GRID_COUNT;
 
+                // Clear
                 ctx.fillStyle = '#0f172a';
                 ctx.fillRect(0, 0, width, width);
 
+                // Grid (Optional - faint)
                 ctx.strokeStyle = '#1e293b';
                 ctx.lineWidth = 1;
                 for(let i=0; i<=GRID_COUNT; i++) {
@@ -708,11 +725,13 @@
                     ctx.stroke();
                 }
 
+                // Food
                 ctx.font = `${cellSize - 2}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(food.current.emoji, food.current.x * cellSize + cellSize/2, food.current.y * cellSize + cellSize/2 + 2);
 
+                // Snake
                 snake.current.forEach((segment, i) => {
                     ctx.fillStyle = i === 0 ? '#e4b00f' : '#10b981';
                     ctx.beginPath();
@@ -746,7 +765,7 @@
 
             useEffect(() => {
                 draw();
-            }, [gameOver, score]);
+            }, [gameOver, score]); // Redraw on state change too
 
             const handleTouchControl = (d) => {
                 switch(d) {
@@ -760,6 +779,7 @@
             return (
                 <div className="fixed inset-0 bg-slate-900/95 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-fade-in touch-none select-none">
                     
+                    {/* Instant Blur Button for Score >= 20 */}
                     {score >= 20 && (
                         <button 
                             onClick={instantToggleBlur} 
@@ -801,6 +821,7 @@
                             )}
                         </div>
 
+                        {/* Mobile Controls */}
                         <div className="mt-8 grid grid-cols-3 gap-2 w-full max-w-[200px]">
                             <div></div>
                             <button className="bg-slate-800/80 p-4 rounded-xl text-white flex justify-center active:bg-[#e4b00f] active:text-[#002f55] transition-colors" onPointerDown={(e) => {e.preventDefault(); handleTouchControl('UP');}}><ChevronUp size={24} /></button>
@@ -819,14 +840,13 @@
           const isEditingAction = pendingAction?.type === 'ADD' || pendingAction?.type === 'ADD_MEMBER';
           const isBlurToggle = pendingAction?.type === 'TOGGLE_BLUR';
           const isEditInstructions = pendingAction?.type === 'EDIT_INSTRUCTIONS';
-          const isViewLog = pendingAction?.type === 'VIEW_LOG';
           return (
             <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in no-print">
               <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-slate-100 dark:border-slate-700 text-center">
                 <div className="flex justify-center mb-4"><div className="bg-[#002f55]/10 dark:bg-slate-700 p-3 rounded-full text-[#002f55] dark:text-white"><Lock size={32} /></div></div>
                 <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Varnostna koda</h3>
                 <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">
-                  {isViewLog ? 'Za dostop do sistemskih logov vpišite ključ.' : (isBlurToggle || isEditInstructions ? 'Za to akcijo potrebujete sistemsko kodo.' : (isEditingAction ? 'Za to akcijo je potrebna koda za urejanje.' : 'Za to akcijo je potreben administratorski PIN.'))}
+                  {isBlurToggle || isEditInstructions ? 'Za to akcijo potrebuješ ADMIN PIN.' : (isEditingAction ? 'Za to akcijo je potrebna koda za urejanje.' : 'Za to akcijo je potreben administratorski PIN.')}
                 </p>
                 <input type="password" inputMode="numeric" autoFocus value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && onConfirm()} placeholder="••••" className="w-full bg-slate-100 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-[#e4b00f] dark:text-white mb-2" />
                 {error && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačna koda!</p>}
@@ -924,6 +944,7 @@
         // ==========================================
 
         const TabAnalytics = ({ history, members, setActiveTab, isBlurred, darkMode }) => {
+            // 1. MAPPING BARV (Barva je vezana na ime člana)
             const memberColorMap = useMemo(() => {
                 const map = {};
                 members.forEach((m, i) => {
@@ -932,6 +953,7 @@
                 return map;
             }, [members]);
 
+            // 2. PIE DATA (Uporabi barvo iz mape)
             const pieData = useMemo(() => {
                 const consumption = {};
                 members.forEach(m => consumption[m] = 0);
@@ -948,14 +970,16 @@
                     .map(name => ({ 
                         name, 
                         value: consumption[name],
-                        color: memberColorMap[name] 
+                        color: memberColorMap[name] // Barva vezana na ime
                     }))
                     .filter(item => item.value > 0)
                     .sort((a, b) => b.value - a.value);
             }, [history, members, memberColorMap]);
 
+            // 3. TIME DATA (Agregacija po dnevih za gladek graf)
             const timeData = useMemo(() => {
                 const validHistory = history.filter(h => h.date);
+                // Sortiramo kronološko + adjustmenti imajo prednost na isti dan
                 const sortedHistory = [...validHistory].sort((a, b) => {
                     const dateA = new Date(a.date);
                     const dateB = new Date(b.date);
@@ -963,6 +987,7 @@
                     
                     if (diff !== 0) return diff;
                     
+                    // Če sta datuma enaka, naj bo 'adjustment' (reset) PRVI
                     if (a.type === 'adjustment' && b.type !== 'adjustment') return -1;
                     if (a.type !== 'adjustment' && b.type === 'adjustment') return 1;
                     return 0;
@@ -973,6 +998,7 @@
                 
                 const groupedByDate = {};
 
+                // Procesiraj transakcije
                 sortedHistory.forEach(entry => {
                     if (entry.type === 'adjustment') {
                         currentBalances[entry.user] = (currentBalances[entry.user] || 0) + entry.amount;
@@ -983,15 +1009,19 @@
                             currentBalances[m] -= consumed;
                         });
                     }
+                    // Shrani/Povozi stanje za ta datum (vedno obvelja zadnje stanje dneva)
                     groupedByDate[entry.date] = { ...currentBalances };
                 });
 
                 const dataPoints = [];
                 const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
 
+                // Če imamo zgodovino, dodaj začetno točko 0 le, če PRVI vnos NI adjustment (reset)
+                // Če je bil reset, začnemo pri vrednostih reseta.
                 const hasResetStart = sortedHistory.length > 0 && sortedHistory[0].type === 'adjustment';
                 
                 if (!hasResetStart && sortedDates.length > 0) {
+                      // Dodaj "Start" točko dan pred prvo transakcijo, da graf ne lebdi
                       const firstDate = new Date(sortedDates[0]);
                       firstDate.setDate(firstDate.getDate() - 1);
                       const startPoint = { date: 'Start', fullDate: firstDate.toISOString() };
@@ -1009,6 +1039,7 @@
                     dataPoints.push(point);
                 });
 
+                // Vzemi zadnjih 30 točk (dni), da graf ni prenatrpan
                 return dataPoints.length > 30 ? dataPoints.slice(dataPoints.length - 30) : dataPoints;
             }, [history, members]);
 
@@ -1101,6 +1132,7 @@
                         <p className="text-[10px] text-slate-300 dark:text-slate-500 text-center mt-2 italic">Graf prikazuje, kdo pleza v plus in kdo tone v minus skozi čas.</p>
                     </div>
 
+                    {/* GUMB DO MATRIK */}
                     <button 
                         onClick={() => setActiveTab('matrix')} 
                         disabled={isBlurred}
@@ -1117,6 +1149,7 @@
 
         const TabDashboard = ({ payerRanking, balances, setActiveTab, titles, onOpenRoulette, isBlurred, onOpenStats, memberHunger, onToggleHunger, dailyMessage, onEditMessage }) => (
           <div className="space-y-6 animate-fade-in">
+            {/* SPOROČILO DNEVA - LOGIKA */}
             {dailyMessage && (
                 <div className="bg-yellow-100 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-700/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm relative animate-fade-in">
                     <StickyNote className="text-yellow-500 dark:text-yellow-400 shrink-0" size={24} />
@@ -1279,15 +1312,15 @@
             </div>
             <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border-2 border-slate-100 dark:border-slate-700 space-y-4">{settlements.length > 0 ? settlements.map((s, i) => (<div key={i} className="flex items-center gap-3"><div className="flex-1 text-center bg-rose-50 dark:bg-rose-900/20 rounded-xl p-2 font-bold text-xs text-slate-800 dark:text-rose-100">{s.from}</div><div className="text-center min-w-[60px]"><p className="text-[10px] font-black bg-slate-800 dark:bg-slate-700 text-white px-2 py-0.5 rounded-full">{s.amount.toFixed(2)} €</p><ArrowRightCircle size={14} className="mx-auto text-slate-200 dark:text-slate-600 mt-1" /></div><div className="flex-1 text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-2 font-bold text-xs text-slate-800 dark:text-emerald-100">{s.to}</div></div>)) : <div className="text-center py-10 text-slate-300 dark:text-slate-600 italic">Vse je poravnano!</div>}</div>
             <button onClick={onPrint} className="w-full py-3 bg-[#002f55]/5 dark:bg-slate-800 text-[#002f55] dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-[#002f55]/10 dark:hover:bg-slate-700 transition-all border border-[#002f55]/10 dark:border-slate-700"><Printer size={18} /> Shrani PDF Poročilo</button>
-            {showResetConfirm ? (<div className="bg-white dark:bg-slate-800 border-2 border-[#002f55] dark:border-[#e4b00f] p-6 rounded-3xl shadow-2xl space-y-6"><div className="flex justify-between items-center mb-2"><h4 className="font-black text-[#002f55] dark:text-[#e4b00f] flex items-center gap-2"><RefreshCcw size={20} /> Resetiraj</h4><button onClick={() => setManualStartBalances({ ...balances })} className="text-xs bg-[#002f55]/5 dark:bg-[#e4b00f]/10 text-[#002f55] dark:text-[#e4b00f] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#002f55]/10 dark:hover:bg-[#e4b00f]/20 transition-all border border-[#002f55]/10 dark:border-slate-700/50"><ArrowDownCircle size={14} /> Prenesi stanja</button></div><p className="text-xs text-slate-400 -mt-4 mb-2">Vpiši ali prenesi končna stanja v novo obdobje.</p><div className="space-y-3 max-h-80 overflow-y-auto pr-1">{members.map(m => (<div key={m} className="flex justify-between items-center gap-4 bg-slate-50 dark:bg-slate-700 p-2 rounded-xl"><span className="text-sm font-bold text-slate-600 dark:text-slate-300">{m}</span><input type="text" inputMode="decimal" placeholder="0.00" value={manualStartBalances[m] || ''} onChange={e => { const v = e.target.value.replace(',', '.'); if (/^-?[0-9]*\.?[0-9]*$/.test(v)) setManualStartBalances({ ...manualStartBalances, [m]: v }); }} className="w-24 p-2 rounded-lg border border-[#002f55]/20 dark:border-slate-600 text-right font-black text-[#002f55] dark:text-white bg-white dark:bg-slate-800" /></div>))}</div><div className={`p-3 rounded-2xl text-center text-xs font-bold ${isResetBalanced ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'}`}>Vsota vseh stanj: {Object.values(manualStartBalances).reduce((a, b) => a + (parseFloat(b) || 0), 0).toFixed(2)} € (Mora biti 0)</div><div className="flex gap-2"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-slate-400 font-bold">Prekliči</button><button disabled={!isResetBalanced || isResetting} onClick={finalizeReset} className="flex-[2] bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] py-3 rounded-2xl font-black shadow-lg shadow-[#002f55]/20 disabled:opacity-20">{isResetting ? 'Brisanje...' : 'POTRDI IN ZAČNI'}</button></div></div>) : (<button disabled={historyLength === 0} onClick={startResetProcess} className="w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-5 rounded-3xl font-black text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"><RefreshCcw size={18} className="text-[#002f55] dark:text-[#e4b00f]" /> Zaključi obdobje</button>)}
+            {showResetConfirm ? (<div className="bg-white dark:bg-slate-800 border-2 border-[#002f55] dark:border-[#e4b00f] p-6 rounded-3xl shadow-2xl space-y-6"><div className="flex justify-between items-center mb-2"><h4 className="font-black text-[#002f55] dark:text-[#e4b00f] flex items-center gap-2"><RefreshCcw size={20} /> Resetiraj</h4><button onClick={() => setManualStartBalances({ ...balances })} className="text-xs bg-[#002f55]/5 dark:bg-[#e4b00f]/10 text-[#002f55] dark:text-[#e4b00f] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#002f55]/10 dark:hover:bg-[#e4b00f]/20 transition-all border border-[#002f55]/10 dark:border-[#e4b00f]/20"><ArrowDownCircle size={14} /> Prenesi stanja</button></div><p className="text-xs text-slate-400 -mt-4 mb-2">Vpiši ali prenesi končna stanja v novo obdobje.</p><div className="space-y-3 max-h-80 overflow-y-auto pr-1">{members.map(m => (<div key={m} className="flex justify-between items-center gap-4 bg-slate-50 dark:bg-slate-700 p-2 rounded-xl"><span className="text-sm font-bold text-slate-600 dark:text-slate-300">{m}</span><input type="text" inputMode="decimal" placeholder="0.00" value={manualStartBalances[m] || ''} onChange={e => { const v = e.target.value.replace(',', '.'); if (/^-?[0-9]*\.?[0-9]*$/.test(v)) setManualStartBalances({ ...manualStartBalances, [m]: v }); }} className="w-24 p-2 rounded-lg border border-[#002f55]/20 dark:border-slate-600 text-right font-black text-[#002f55] dark:text-white bg-white dark:bg-slate-800" /></div>))}</div><div className={`p-3 rounded-2xl text-center text-xs font-bold ${isResetBalanced ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'}`}>Vsota vseh stanj: {Object.values(manualStartBalances).reduce((a, b) => a + (parseFloat(b) || 0), 0).toFixed(2)} € (Mora biti 0)</div><div className="flex gap-2"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 text-slate-400 font-bold">Prekliči</button><button disabled={!isResetBalanced || isResetting} onClick={finalizeReset} className="flex-[2] bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] py-3 rounded-2xl font-black shadow-lg shadow-[#002f55]/20 disabled:opacity-20">{isResetting ? 'Brisanje...' : 'POTRDI IN ZAČNI'}</button></div></div>) : (<button disabled={historyLength === 0} onClick={startResetProcess} className="w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-5 rounded-3xl font-black text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"><RefreshCcw size={18} className="text-[#002f55] dark:text-[#e4b00f]" /> Zaključi obdobje</button>)}
           </div>
         );
 
-        const TabSettings = ({ members, history, removeMember, showAddMember, setShowAddMember, newMemberName, setNewMemberName, addMember, darkMode, toggleDarkMode, instructions, onEditInstructions, onShowLog, isAdminLogUnlocked, visits }) => (
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 animate-fade-in transition-colors space-y-8">
+        const TabSettings = ({ members, history, removeMember, showAddMember, setShowAddMember, newMemberName, setNewMemberName, addMember, darkMode, toggleDarkMode, instructions, onEditInstructions }) => (
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 animate-fade-in transition-colors">
             
             {/* DARK MODE TOGGLE */}
-            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl">
+            <div className="flex justify-between items-center mb-8 bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl">
                 <div className="flex items-center gap-3">
                     <div className="bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] p-2 rounded-xl">
                         {darkMode ? <Moon size={20} /> : <Sun size={20} />}
@@ -1307,64 +1340,32 @@
                 </button>
             </div>
 
-            <div>
-              <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><UserPlus className="text-[#002f55] dark:text-[#e4b00f]" /> Ekipa</h3>
-              <div className="space-y-2 mb-4">
-                {members.map(m => (
-                  <div key={m} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-700 rounded-xl group transition-all hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm">
-                    <span className="font-bold text-slate-600 dark:text-slate-200">{m}</span>
-                    {history.length === 0 && <button onClick={() => removeMember(m)} className="text-rose-200 hover:text-rose-500"><Trash2 size={16} /></button>}
-                  </div>
-                ))}
-              </div>
-              {!showAddMember ? (
-                <button onClick={() => setShowAddMember(true)} className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs">DODAJ ČLANA</button>
-              ) : (
-                <div className="flex gap-2 mb-4"><input autoFocus type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="Ime..." className="flex-1 p-3 bg-slate-100 dark:bg-slate-700 dark:text-white rounded-xl outline-none" onKeyDown={e => e.key === 'Enter' && addMember()} /><button onClick={addMember} className="bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] px-6 rounded-xl font-black">DODAJ</button></div>
-              )}
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2"><UserPlus className="text-[#002f55] dark:text-[#e4b00f]" /> Ekipa</h3>
+            <div className="space-y-2 mb-6">
+              {members.map(m => (
+                <div key={m} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-700 rounded-xl group transition-all hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm">
+                  <span className="font-bold text-slate-600 dark:text-slate-200">{m}</span>
+                  {history.length === 0 && <button onClick={() => removeMember(m)} className="text-rose-200 hover:text-rose-500"><Trash2 size={16} /></button>}
+                </div>
+              ))}
             </div>
+            {!showAddMember ? (
+              <button onClick={() => setShowAddMember(true)} className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs">DODAJ ČLANA</button>
+            ) : (
+              <div className="flex gap-2 mb-4"><input autoFocus type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="Ime..." className="flex-1 p-3 bg-slate-100 dark:bg-slate-700 dark:text-white rounded-xl outline-none" onKeyDown={e => e.key === 'Enter' && addMember()} /><button onClick={addMember} className="bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] px-6 rounded-xl font-black">DODAJ</button></div>
+            )}
             
             {/* INSTRUCTIONS SECTION */}
-            <div className="border-t border-slate-100 dark:border-slate-700 pt-6">
+            <div className="mt-8 border-t border-slate-100 dark:border-slate-700 pt-6">
                 <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2"><BookOpen className="text-[#002f55] dark:text-[#e4b00f]" /> Navodila</h3>
+                     <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2"><BookOpen className="text-[#002f55] dark:text-[#e4b00f]" /> Pomoč in Navodila</h3>
                      <button onClick={onEditInstructions} className="text-xs font-bold text-[#002f55] dark:text-[#e4b00f] bg-[#002f55]/5 dark:bg-[#e4b00f]/10 px-3 py-1.5 rounded-lg hover:bg-[#002f55]/10 dark:hover:bg-[#e4b00f]/20 transition-colors">Uredi</button>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto custom-scrollbar">
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
                     <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300 font-mono">
                         {instructions || "Navodila še niso vpisana."}
                     </div>
                 </div>
-            </div>
-
-            {/* MASKED: SYSTEM DIAGNOSTICS SECTION */}
-            <div className="border-t border-slate-100 dark:border-slate-700 pt-6">
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Database className="text-slate-400" /> Sistemska stanja</h3>
-                
-                {!isAdminLogUnlocked ? (
-                    <button 
-                        onClick={onShowLog} 
-                        className="w-full py-4 bg-slate-50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700"
-                    >
-                        <RefreshCcw size={16} /> Sinhroniziraj diagnostiko
-                    </button>
-                ) : (
-                    <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 dark:border-slate-700 pb-1">Sistemski žetoni (Zadnjih 20)</p>
-                        <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
-                            {visits.length === 0 ? (
-                                <p className="text-xs text-slate-400 italic">Ni zapisov.</p>
-                            ) : (
-                                visits.map((v, i) => (
-                                    <div key={v.id || i} className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                        <span>{v.timestamp?.toDate ? v.timestamp.toDate().toLocaleString('sl-SI') : 'N/A'}</span>
-                                        <span className="bg-slate-200 dark:bg-slate-800 px-1.5 rounded">{v.device}</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
           </div>
         );
@@ -1418,10 +1419,6 @@
           const [showInstructionsModal, setShowInstructionsModal] = useState(false);
           const [instructionsInput, setInstructionsInput] = useState("");
 
-          // Zamaskirana stanja za beleženje prisotnosti
-          const [visits, setVisits] = useState([]);
-          const [isAdminLogUnlocked, setIsAdminLogUnlocked] = useState(false);
-
           // --- DARK MODE STATE ---
           const [darkMode, setDarkMode] = useState(() => {
               if (typeof window !== 'undefined') {
@@ -1458,7 +1455,7 @@
               } else {
                   titleClickTimeoutRef.current = setTimeout(() => {
                       titleClicksRef.current = 0;
-                  }, 1000); 
+                  }, 1000); // Reset after 1 second
               }
           };
 
@@ -1479,43 +1476,6 @@
             const unsubscribe = onAuthStateChanged(auth, setUser);
             return () => unsubscribe();
           }, []);
-
-          // --- SAMODEJNO BELEŽENJE ---
-          useEffect(() => {
-            if (!user) return;
-            
-            const logVisit = async () => {
-                const ua = navigator.userAgent;
-                let device = "PC";
-                if (/Android/i.test(ua)) device = "Android";
-                else if (/iPhone|iPad|iPod/i.test(ua)) device = "iOS";
-
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'visits'), {
-                        timestamp: serverTimestamp(),
-                        device: device,
-                        ua: ua
-                    });
-                } catch (e) {
-                    // Tiho beleženje
-                }
-            };
-            logVisit();
-          }, [user]);
-
-          // --- PRIDOBIVANJE DIAGNOSTIKE ---
-          useEffect(() => {
-              if (!user || !isAdminLogUnlocked) return;
-              
-              const visitsRef = collection(db, 'artifacts', appId, 'public', 'data', 'visits');
-              const unsub = onSnapshot(visitsRef, (snapshot) => {
-                  const vList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                  vList.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                  setVisits(vList.slice(0, 20));
-              }, (err) => {});
-              
-              return () => unsub();
-          }, [user, isAdminLogUnlocked]);
 
           useEffect(() => {
             if (!user) return;
@@ -1654,7 +1614,9 @@
             setShowAdminAuth(true);
           };
 
-          const handleToggleDarkMode = () => setDarkMode(prev => !prev);
+          const handleToggleDarkMode = () => {
+            setDarkMode(prev => !prev);
+          };
           
           const handleEditInstructions = () => {
              setPendingAction({ type: 'EDIT_INSTRUCTIONS' });
@@ -1663,14 +1625,7 @@
              setShowAdminAuth(true);
           };
 
-          // Zamaskirana funkcija za dostop do dnevnika
-          const handleShowLog = () => {
-             setPendingAction({ type: 'VIEW_LOG' });
-             setAdminPinInput('');
-             setAdminAuthError(false);
-             setShowAdminAuth(true);
-          };
-
+          // --- NEW INSTANT TOGGLE BLUR FOR SNAKE GAME ---
           const instantToggleBlur = async () => {
               if (!user) return;
               const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
@@ -1681,6 +1636,8 @@
             e.preventDefault();
             if (!user || !amount || selectedParticipants.length === 0) return;
             if (splitType === 'manual' && !isManualBalanced) return; 
+            
+            // Direktno izvedemo akcijo brez PIN preverjanja
             await performAddEntry();
           };
 
@@ -1695,6 +1652,7 @@
               setShowInstructionsModal(false);
           };
 
+          // --- MODAL HANDLERS ---
           const openMessageModal = () => {
               setMessageInput(globalSettings.dailyMessage || "");
               setShowMessageModal(true);
@@ -1721,9 +1679,11 @@
              };
             if (splitType === 'manual') data.manualAmounts = { ...manualAmounts }; 
             
+            // 1. Dodaj vnos v zgodovino
             const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
             batch.set(historyRef, data);
 
+            // 2. Resetiraj lakoto za vse, ki so lačni
             Object.keys(memberHunger).forEach(name => {
                 if (memberHunger[name]) {
                     const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', name);
@@ -1731,10 +1691,13 @@
                 }
             });
 
+            // 3. Resetiraj sporočilo dneva
             const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
             batch.set(settingsRef, { dailyMessage: "" }, { merge: true });
 
             await batch.commit();
+
+            // triggerGoldBurst();
 
             setAmount('');
             setManualAmounts({});
@@ -1800,7 +1763,7 @@
             const action = pendingAction?.type;
             let valid = false;
 
-            if ((action === 'DELETE' || action === 'RESET' || action === 'TOGGLE_BLUR' || action === 'EDIT_INSTRUCTIONS' || action === 'VIEW_LOG') && pin === ADMIN_PIN) valid = true;
+            if ((action === 'DELETE' || action === 'RESET' || action === 'TOGGLE_BLUR' || action === 'EDIT_INSTRUCTIONS') && pin === ADMIN_PIN) valid = true;
             else if ((action === 'ADD' || action === 'ADD_MEMBER') && (pin === EDIT_CODE || pin === ADMIN_PIN)) valid = true;
 
             if (valid) {
@@ -1821,8 +1784,6 @@
                 await setDoc(settingsRef, { isBlurred: !globalSettings.isBlurred }, { merge: true });
               } else if (action === 'EDIT_INSTRUCTIONS') {
                   performEditInstructions();
-              } else if (action === 'VIEW_LOG') {
-                  setIsAdminLogUnlocked(true);
               }
               setPendingAction(null);
             } else {
@@ -1880,15 +1841,37 @@
                 @media print {
                     @page { margin: 1cm; size: A4; }
                     html, body { width: 100%; height: auto; margin: 0 !important; padding: 0 !important; overflow: visible !important; background-color: white !important; }
+                    
+                    /* Hide everything by default */
                     body > * { display: none !important; }
+                    
+                    /* But show #root (where React lives) */
                     body > #root { display: block !important; width: 100%; height: auto; overflow: visible; }
+                    
+                    /* Hide everything in #root */
                     #root > * { display: none !important; }
+                    
+                    /* But show .app-container */
                     #root > .app-container { display: block !important; width: 100%; height: auto; overflow: visible; position: static; }
+                    
+                    /* Hide everything in .app-container */
                     .app-container > * { display: none !important; }
+                    
+                    /* But show .print-container */
                     .app-container > .print-container { display: block !important; width: 100%; height: auto; }
-                    .print-container { font-family: sans-serif; font-size: 10px; color: black; background: white; }
+                    
+                    /* Print container styling */
+                    .print-container { 
+                          font-family: sans-serif; 
+                          font-size: 10px; 
+                          color: black; 
+                          background: white; 
+                      }
+
+                    /* Ensure tables print nicely */
                     table { width: 100%; border-collapse: collapse; }
                     th, td { border: 1px solid #ddd; padding: 4px; }
+                    
                     .page-break { page-break-before: always; }
                     .avoid-break { page-break-inside: avoid; }
                     ::-webkit-scrollbar { display: none; }
@@ -1905,6 +1888,7 @@
                 .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
                 .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
                 .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
+              
                 @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
                 .animate-scroll { display: flex; width: max-content; animation: scroll 30s linear infinite; }
                 .ticker-mask { mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
@@ -1916,6 +1900,7 @@
               <MessageModal show={showMessageModal} message={messageInput} setMessage={setMessageInput} onConfirm={saveMessageFromModal} onCancel={() => setShowMessageModal(false)} />
               <InstructionsEditModal show={showInstructionsModal} instructions={instructionsInput} setInstructions={setInstructionsInput} onConfirm={saveInstructions} onCancel={() => setShowInstructionsModal(false)} />
               
+              {/* EASTER EGG GAME */}
               {snakeMode && <SnakeGame onClose={() => setSnakeMode(false)} instantToggleBlur={instantToggleBlur} isBlurred={globalSettings.isBlurred} />}
 
               <StatisticsModal 
@@ -1954,6 +1939,7 @@
                   />
                 )}
                 
+                {/* AKTIVACIJA NOVEGA ZAVIHEKA */}
                 {activeTab === 'analytics' && <TabAnalytics history={history} members={members} setActiveTab={setActiveTab} isBlurred={globalSettings.isBlurred} darkMode={darkMode} />}
                 
                 {activeTab === 'matrix' && <TabMatrix members={members} history={history} matrixType={matrixType} setMatrixType={setMatrixType} onPrint={handlePrintReport} />}
@@ -1983,9 +1969,6 @@
                     darkMode={darkMode} toggleDarkMode={handleToggleDarkMode}
                     instructions={globalSettings.instructions}
                     onEditInstructions={handleEditInstructions}
-                    onShowLog={handleShowLog}
-                    isAdminLogUnlocked={isAdminLogUnlocked}
-                    visits={visits}
                   />
                 )}
               </main>
