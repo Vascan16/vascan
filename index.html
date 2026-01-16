@@ -1403,8 +1403,8 @@
                         <Activity size={12} /> Diagnostika sistema
                     </button>
                 ) : (
-                    <div className="bg-slate-900 text-green-400 p-4 rounded-xl font-mono text-[9px] space-y-2 overflow-x-auto border border-slate-800 mt-2 animate-fade-in">
-                        <div className="flex justify-between items-center border-b border-green-900/50 pb-2 mb-2">
+                    <div className="bg-slate-900 text-green-400 p-4 rounded-xl font-mono text-[9px] space-y-2 border border-slate-800 mt-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
+                        <div className="flex justify-between items-center border-b border-green-900/50 pb-2 mb-2 sticky top-0 bg-slate-900 z-10">
                             <span className="font-bold uppercase text-green-600">System Diagnostic Log</span>
                             <span className="text-[8px] text-green-800">SECURE</span>
                         </div>
@@ -1418,7 +1418,7 @@
                                     <span>Res: <span className="text-slate-400">{v.screen || '?'}</span></span>
                                     <span>Lang: <span className="text-slate-400">{v.lang || '?'}</span></span>
                                 </div>
-                                <div className="truncate text-slate-600 text-[8px]">{v.ua}</div>
+                                <div className="break-all whitespace-normal text-slate-600 text-[8px] leading-tight mt-1">{v.ua}</div>
                             </div>
                         ))}
                     </div>
