@@ -9,19 +9,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/706/706164.png">
-    <link rel="manifest" href='data:application/manifest+json,{
-        "name": "Malica Manager",
-        "short_name": "Malica",
-        "display": "standalone",
-        "start_url": ".",
-        "background_color": "#f8fafc",
-        "theme_color": "#002f55",
-        "icons": [{
-            "src": "https://cdn-icons-png.flaticon.com/512/706/706164.png", 
-            "sizes": "512x512",
-            "type": "image/png"
-        }]
-    }' />
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -66,6 +53,46 @@
         }
     }
     </script>
+    
+    <style>
+        /* Custom Styles that can't be handled by Tailwind purely */
+        @media print {
+            @page { margin: 1cm; size: A4; }
+            html, body { width: 100%; height: auto; margin: 0 !important; padding: 0 !important; overflow: visible !important; background-color: white !important; }
+            body > * { display: none !important; }
+            body > #root { display: block !important; width: 100%; height: auto; overflow: visible; }
+            #root > * { display: none !important; }
+            #root > .app-container { display: block !important; width: 100%; height: auto; overflow: visible; position: static; }
+            .app-container > * { display: none !important; }
+            .app-container > .print-container { display: block !important; width: 100%; height: auto; }
+            .print-container {
+                font-family: sans-serif;
+                font-size: 10px;
+                color: black;
+                background: white;
+            }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 4px; }
+            .page-break { page-break-before: always; }
+            .avoid-break { page-break-inside: avoid; }
+            ::-webkit-scrollbar { display: none; }
+        }
+        .print-container { display: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
+        .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
+        .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
+        @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .animate-scroll { display: flex; width: max-content; animation: scroll 30s linear infinite; }
+        .ticker-mask { mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
+    </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 select-none transition-colors duration-300">
     <div id="root"></div>
@@ -73,43 +100,43 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { 
-          Users, History, PlusCircle, Trash2, TrendingDown, 
-          CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
-          Wallet, Calculator, CheckCircle2, Download, 
-          AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale, 
-          ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X, 
-          Crown, PiggyBank, Ghost, Medal, Dices, Eye, EyeOff, BarChart3, Pizza, Settings, Utensils, StickyNote, PenLine,
-          PieChart as IconPieChart, Activity, Database, ArrowRight, Play, Pause, RotateCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Gamepad2, Moon, Sun,
-          Sigma, BookOpen
+        import {
+           Users, History, PlusCircle, Trash2, TrendingDown,
+           CreditCard, UserPlus, ArrowRightCircle, ArrowDownCircle, Calendar,
+           Wallet, Calculator, CheckCircle2, Download,
+           AlertTriangle, FileText, CheckSquare, Square, Lock, Info, Scale,
+           ListOrdered, RefreshCcw, Save, Table, Grid, Printer, Bell, X,
+           Crown, PiggyBank, Ghost, Medal, Dices, Eye, EyeOff, BarChart3, Pizza, Settings, Utensils, StickyNote, PenLine,
+           PieChart as IconPieChart, Activity, Database, ArrowRight, Play, Pause, RotateCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Gamepad2, Moon, Sun,
+           Sigma, BookOpen, Terminal, ShieldAlert
         } from 'lucide-react';
         
         // --- RECHARTS IMPORTS ---
-        import { 
-            PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
-            Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine
+        import {
+             PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+             Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine
         } from 'recharts';
 
         import { initializeApp } from 'firebase/app';
-        import { 
-           getAuth, 
-           signInAnonymously, 
-           signInWithCustomToken, 
-           onAuthStateChanged 
-         } from 'firebase/auth';
-        import { 
-           getFirestore, 
-           collection, 
-           doc, 
-           setDoc, 
-           addDoc, 
-           deleteDoc, 
-           onSnapshot, 
-           query, 
-           writeBatch, 
-           getDocs, 
-           serverTimestamp 
-         } from 'firebase/firestore';
+        import {
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged
+          } from 'firebase/auth';
+        import {
+            getFirestore,
+            collection,
+            doc,
+            setDoc,
+            addDoc,
+            deleteDoc,
+            onSnapshot,
+            query,
+            writeBatch,
+            getDocs,
+            serverTimestamp
+          } from 'firebase/firestore';
 
         // Error Boundary
         class ErrorBoundary extends React.Component {
@@ -158,8 +185,8 @@
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             } else {
                 firebaseConfig = MOJ_FIREBASE_CONFIG;
-                appId = 'malica-manager-v1'; 
-            }
+                appId = 'malica-manager-v1';
+             }
         } catch (e) {
             console.warn("Preklop na ročno konfiguracijo.");
             firebaseConfig = MOJ_FIREBASE_CONFIG;
@@ -171,15 +198,15 @@
         const db = getFirestore(app);
 
         const _appVitals = {
-          a_key: atob("MTI0Mw=="), 
-          e_key: atob("MTI0Mw=="), 
-          s_key: atob("MDAwMA==") 
-        };
+          a_key: atob("MTI0Mw=="),
+           e_key: atob("MTI0Mw=="),
+           s_key: atob("MDAwMA==")
+         };
 
         const ACCESS_CODE = _appVitals.a_key;
         const EDIT_CODE = _appVitals.e_key;
         const ADMIN_PIN = _appVitals.s_key;
-        
+
         const CHART_COLORS = ['#002f55', '#e4b00f', '#10b981', '#f43f5e', '#8b5cf6', '#0ea5e9', '#f97316', '#64748b'];
 
         // ==========================================
@@ -225,8 +252,8 @@
         };
 
         const calculateTitles = (members, balances, history) => {
-          const titles = {}; 
-          const addTitle = (member, titleObj) => {
+          const titles = {};
+           const addTitle = (member, titleObj) => {
             if (!titles[member]) titles[member] = [];
             titles[member].push(titleObj);
           };
@@ -256,8 +283,8 @@
 
           const participationCounts = {};
           members.forEach(m => participationCounts[m] = 0);
-          history.forEach(e => { 
-             if (e.type !== 'adjustment' && e.participants) {
+          history.forEach(e => {
+              if (e.type !== 'adjustment' && e.participants) {
               e.participants.forEach(p => participationCounts[p] = (participationCounts[p] || 0) + 1);
             }
           });
@@ -284,17 +311,17 @@
           const membersStr = `clani = {${members.map(m => `'${m}'`).join(', ')}};`;
           const zVector = members.map(m => adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0).toFixed(2)).join(', ');
           const zStr = `Z = [${zVector}]; % Začetna stanja`;
-            
+          
           const pRows = transactions.length > 0 ? transactions.map(t => members.map(m => getMatrixValue(t, m, 'P').toFixed(2)).join(', ')) : [members.map(() => '0.00').join(', ')];
           const pStr = `P = [\n  ${pRows.join(';\n   ')}\n]; % Matrika Plačil (P)`;
-            
+          
           const sRows = transactions.length > 0 ? transactions.map(t => members.map(m => getMatrixValue(t, m, 'S').toFixed(2)).join(', ')) : [members.map(() => '0.00').join(', ')];
           const sStr = `S = [\n  ${sRows.join(';\n   ')}\n]; % Matrika Porabe (S)`;
 
           const footerStr = `        % IZRAČUN KONČNIH BILANC\n        B = Z + sum(P, 1) - sum(S, 1);\n\n        fprintf('\\n--- KONČNA STANJA (Obračun) ---\\n');\n        for i = 1:length(clani)\n            fprintf('%s: %.2f €\\n', clani{i}, B(i));\n        end\n\n        fprintf('\\n--- PREDLAGAN PORAČUN (Navodila za poravnavo) ---\\n');\n        st_clanov = length(clani);\n        [stanja, idx] = sort(B); % Od največjega dolga do največjega upnika\n        upnik_kazalec = st_clanov;\n        dolznik_kazalec = 1;\n\n        while dolznik_kazalec < upnik_kazalec\n            if abs(stanja(dolznik_kazalec)) < 0.01\n                dolznik_kazalec = dolznik_kazalec + 1;\n                continue;\n            end\n            if abs(stanja(upnik_kazalec)) < 0.01\n                upnik_kazalec = upnik_kazalec - 1;\n                continue;\n            end\n            \n            znesek = min(abs(stanja(dolznik_kazalec)), stanja(upnik_kazalec));\n            if znesek > 0\n                fprintf('%s -> %s: %.2f €\\n', clani{idx(dolznik_kazalec)}, clani{idx(upnik_kazalec)}, znesek);\n                stanja(dolznik_kazalec) = stanja(dolznik_kazalec) + znesek;\n                stanja(upnik_kazalec) = stanja(upnik_kazalec) - znesek;\n            end\n            \n            if abs(stanja(dolznik_kazalec)) < 0.01, dolznik_kazalec = dolznik_kazalec + 1; end\n            if abs(stanja(upnik_kazalec)) < 0.01, upnik_kazalec = upnik_kazalec - 1; end\n        end\n        `;
 
-          return `${headerStr}\n${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n${footerStr}`; 
-        };
+          return `${headerStr}\n${membersStr}\n\n${zStr}\n\n${pStr}\n\n${sStr}\n${footerStr}`;
+         };
 
         // ==========================================
         // 3. UI KOMPONENTE
@@ -355,8 +382,7 @@
                       <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X /></button>
                   </div>
                 </div>
-                
-                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
                   {!stats ? (
                     <div className="text-center py-10 text-slate-400 italic">Ni dovolj podatkov za analizo.</div>
                   ) : (
@@ -426,31 +452,27 @@
             <div className="fixed inset-0 bg-slate-900/80 z-[90] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in no-print">
               <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-yellow-100 dark:border-yellow-600/30 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-2 bg-yellow-400"></div>
-                
-                <div className="flex justify-center mb-4 mt-2">
+                                <div className="flex justify-center mb-4 mt-2">
                     <div className="bg-yellow-100 dark:bg-yellow-900/30 p-4 rounded-full text-yellow-600 dark:text-yellow-400 shadow-sm">
                         <StickyNote size={32} />
                     </div>
                 </div>
-                
-                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Sporočilo dneva</h3>
+                                <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Sporočilo dneva</h3>
                 <p className="text-xs text-slate-400 mb-4">Sporočilo bo vidno vsem, dokler se ne vnese nov račun.</p>
-                
-                <textarea 
+                                <textarea
                       autoFocus
                       value={message}
                       onChange={e => setMessage(e.target.value)}
                       placeholder="Npr. Danes gremo na burgerje..."
                       className="w-full bg-yellow-50/50 dark:bg-slate-700 border-2 border-yellow-200 dark:border-yellow-600/30 rounded-xl py-3 px-4 text-center font-bold text-slate-700 dark:text-white outline-none focus:border-yellow-400 focus:bg-white dark:focus:bg-slate-600 transition-all min-h-[80px] resize-none mb-4 placeholder:text-slate-400"
                       onKeyDown={e => {
-                        if(e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            onConfirm();
-                        }
-                    }}
+                          if(e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              onConfirm();
+                          }
+                      }}
                 />
-                
-                <div className="flex gap-2">
+                                <div className="flex gap-2">
                     <button onClick={onCancel} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors">Prekliči</button>
                     <button onClick={onConfirm} className="flex-1 py-3 bg-yellow-400 text-yellow-900 font-bold rounded-xl shadow-lg hover:bg-yellow-500 transition-colors">Objavi</button>
                 </div>
@@ -474,16 +496,14 @@
                                 <p className="text-xs text-slate-500 dark:text-slate-400">Vidno vsem uporabnikom v nastavitvah.</p>
                             </div>
                         </div>
-                        
-                        <textarea 
-                            autoFocus
-                            value={instructions}
-                            onChange={e => setInstructions(e.target.value)}
-                            placeholder="Vpiši navodila, pravila igre, IBAN..."
-                            className="w-full flex-1 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-4 font-mono text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-[#002f55] dark:focus:border-[#e4b00f] transition-all min-h-[200px] resize-none mb-4 custom-scrollbar"
-                        />
-                        
-                        <div className="flex gap-2 mt-auto">
+                                                                <textarea
+                                    autoFocus
+                                    value={instructions}
+                                    onChange={e => setInstructions(e.target.value)}
+                                    placeholder="Vpiši navodila, pravila igre, IBAN..."
+                                    className="w-full flex-1 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-4 font-mono text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-[#002f55] dark:focus:border-[#e4b00f] transition-all min-h-[200px] resize-none mb-4 custom-scrollbar"
+                                />
+                                                                <div className="flex gap-2 mt-auto">
                             <button onClick={onCancel} className="flex-1 py-3 text-slate-400 font-bold bg-slate-50 dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors">Prekliči</button>
                             <button onClick={onConfirm} className="flex-1 py-3 bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity">Shrani</button>
                         </div>
@@ -533,8 +553,8 @@
             const weightedMembers = [];
             members.forEach(m => {
               const bal = balances[m] || 0;
-              const weight = Math.floor((maxBal - bal) + 10); 
-              for(let i=0; i<weight; i++) weightedMembers.push(m);
+              const weight = Math.floor((maxBal - bal) + 10);
+               for(let i=0; i<weight; i++) weightedMembers.push(m);
             });
             if (weightedMembers.length === 0) return members[Math.floor(Math.random() * members.length)];
             return weightedMembers[Math.floor(Math.random() * weightedMembers.length)];
@@ -547,8 +567,8 @@
             const finalWinner = selectWeightedWinner();
             let speed = 50;
             let counter = 0;
-            const maxSteps = 40; 
-            const spinInterval = () => {
+            const maxSteps = 40;
+             const spinInterval = () => {
               const randomName = members[Math.floor(Math.random() * members.length)];
               setCurrentName(randomName);
               counter++;
@@ -559,8 +579,8 @@
                 setCurrentName(finalWinner);
                 setWinner(finalWinner);
                 setIsSpinning(false);
-                triggerFireworks(); 
-              }
+                triggerFireworks();
+               }
             };
             spinInterval();
           };
@@ -736,10 +756,10 @@
                     ctx.fillStyle = i === 0 ? '#e4b00f' : '#10b981';
                     ctx.beginPath();
                     ctx.roundRect(
-                        segment.x * cellSize + 1, 
-                        segment.y * cellSize + 1, 
-                        cellSize - 2, 
-                        cellSize - 2, 
+                        segment.x * cellSize + 1,
+                        segment.y * cellSize + 1,
+                        cellSize - 2,
+                        cellSize - 2,
                         4
                     );
                     ctx.fill();
@@ -778,11 +798,10 @@
 
             return (
                 <div className="fixed inset-0 bg-slate-900/95 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-fade-in touch-none select-none">
-                    
-                    {/* Instant Blur Button for Score >= 20 */}
+                                        {/* Instant Blur Button for Score >= 20 */}
                     {score >= 20 && (
-                        <button 
-                            onClick={instantToggleBlur} 
+                        <button
+                            onClick={instantToggleBlur}
                             className="absolute bottom-6 left-6 z-[120] text-3xl opacity-50 hover:opacity-100 transition-opacity"
                             title="Razkrij/Skrij"
                         >
@@ -840,13 +859,15 @@
           const isEditingAction = pendingAction?.type === 'ADD' || pendingAction?.type === 'ADD_MEMBER';
           const isBlurToggle = pendingAction?.type === 'TOGGLE_BLUR';
           const isEditInstructions = pendingAction?.type === 'EDIT_INSTRUCTIONS';
+          const isShowVisitLog = pendingAction?.type === 'SHOW_VISIT_LOG';
+          
           return (
             <div className="fixed inset-0 bg-slate-900/80 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in no-print">
               <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-xs shadow-2xl border-2 border-slate-100 dark:border-slate-700 text-center">
                 <div className="flex justify-center mb-4"><div className="bg-[#002f55]/10 dark:bg-slate-700 p-3 rounded-full text-[#002f55] dark:text-white"><Lock size={32} /></div></div>
                 <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Varnostna koda</h3>
                 <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">
-                  {isBlurToggle || isEditInstructions ? 'Za to akcijo potrebuješ ADMIN PIN.' : (isEditingAction ? 'Za to akcijo je potrebna koda za urejanje.' : 'Za to akcijo je potreben administratorski PIN.')}
+                  {isShowVisitLog ? 'Za vpogled v dnevnik je potreben ADMIN PIN.' : (isBlurToggle || isEditInstructions ? 'Za to akcijo potrebuješ ADMIN PIN.' : (isEditingAction ? 'Za to akcijo je potrebna koda za urejanje.' : 'Za to akcijo je potreben administratorski PIN.'))}
                 </p>
                 <input type="password" inputMode="numeric" autoFocus value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === 'Enter' && onConfirm()} placeholder="••••" className="w-full bg-slate-100 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl py-3 text-center text-2xl font-bold tracking-widest outline-none focus:border-[#e4b00f] dark:text-white mb-2" />
                 {error && <p className="text-rose-500 text-xs font-bold mb-4 animate-bounce">Napačna koda!</p>}
@@ -894,10 +915,10 @@
                     <tbody>
                         {members.map(m => {
                             const zTot = history.reduce((sum, e) => sum + getMatrixValue(e, m, 'Z'), 0);
-                            const pTot = history.reduce((sum, e) => { if (e.type === 'adjustment') return sum; return sum + (e.payer === m ? (parseFloat(e.amount) || 0) : 0) }, 0); 
-                            const sTot = history.reduce((sum, e) => { if (e.type === 'adjustment') return sum; return sum + getMatrixValue(e, m, 'S') }, 0); 
-                            const bal = balances[m] || 0; 
-                            return (
+                            const pTot = history.reduce((sum, e) => { if (e.type === 'adjustment') return sum; return sum + (e.payer === m ? (parseFloat(e.amount) || 0) : 0) }, 0);
+                             const sTot = history.reduce((sum, e) => { if (e.type === 'adjustment') return sum; return sum + getMatrixValue(e, m, 'S') }, 0);
+                             const bal = balances[m] || 0;
+                             return (
                                 <tr key={m}>
                                     <td className="font-bold">{m}</td>
                                     <td className="text-right text-slate-500">{zTot.toFixed(2)} €</td>
@@ -920,16 +941,12 @@
           <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 py-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)] print:hidden z-50 transition-colors">
             <div className="max-w-md mx-auto flex justify-between items-center">
               <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'dashboard' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'}`}><TrendingDown size={22} /><span className="text-[10px] mt-1 font-bold">Stanje</span></button>
-              
-              <button onClick={() => setActiveTab('analytics')} className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'analytics' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'}`}><Activity size={22} /><span className="text-[10px] mt-1 font-bold">Analitika</span></button>
-              
-              <div className="relative -top-8"><button onClick={() => setActiveTab('add')} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl ${activeTab === 'add' ? 'bg-[#002f55] dark:bg-[#e4b00f] border-[#e4b00f] dark:border-[#002f55] text-[#e4b00f] dark:text-[#002f55]' : 'bg-[#002f55] dark:bg-[#002f55] border-white dark:border-slate-800 text-[#e4b00f]'} border-4 active:scale-90 transition-all`}><PlusCircle size={32} /></button></div>
-              
-              <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'history' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'}`}><History size={22} /><span className="text-[10px] mt-1 font-bold">Zgodovina</span></button>
-              
-              <button 
-                onClick={() => !isBlurred && setActiveTab('settle')} 
-                className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'settle' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'} ${isBlurred ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            <button onClick={() => setActiveTab('analytics')} className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'analytics' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'}`}><Activity size={22} /><span className="text-[10px] mt-1 font-bold">Analitika</span></button>
+                            <div className="relative -top-8"><button onClick={() => setActiveTab('add')} className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl ${activeTab === 'add' ? 'bg-[#002f55] dark:bg-[#e4b00f] border-[#e4b00f] dark:border-[#002f55] text-[#e4b00f] dark:text-[#002f55]' : 'bg-[#002f55] dark:bg-[#002f55] border-white dark:border-slate-800 text-[#e4b00f]'} border-4 active:scale-90 transition-all`}><PlusCircle size={32} /></button></div>
+                            <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'history' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'}`}><History size={22} /><span className="text-[10px] mt-1 font-bold">Zgodovina</span></button>
+                            <button
+                 onClick={() => !isBlurred && setActiveTab('settle')}
+                 className={`flex flex-col items-center p-2 rounded-xl transition-all ${activeTab === 'settle' ? 'text-[#002f55] dark:text-white bg-slate-100 dark:bg-slate-800 scale-105' : 'text-slate-400'} ${isBlurred ? 'opacity-30 cursor-not-allowed' : ''}`}
                 disabled={isBlurred}
               >
                 <Calculator size={22} />
@@ -957,8 +974,7 @@
             const pieData = useMemo(() => {
                 const consumption = {};
                 members.forEach(m => consumption[m] = 0);
-                
-                history.forEach(entry => {
+                                history.forEach(entry => {
                     if (entry.type !== 'adjustment') {
                         members.forEach(m => {
                             consumption[m] += getMatrixValue(entry, m, 'S');
@@ -967,9 +983,9 @@
                 });
 
                 return Object.keys(consumption)
-                    .map(name => ({ 
-                        name, 
-                        value: consumption[name],
+                    .map(name => ({
+                          name,
+                          value: consumption[name],
                         color: memberColorMap[name] // Barva vezana na ime
                     }))
                     .filter(item => item.value > 0)
@@ -984,19 +1000,15 @@
                     const dateA = new Date(a.date);
                     const dateB = new Date(b.date);
                     const diff = dateA - dateB;
-                    
-                    if (diff !== 0) return diff;
-                    
-                    // Če sta datuma enaka, naj bo 'adjustment' (reset) PRVI
+                                    if (diff !== 0) return diff;
+                                    // Če sta datuma enaka, naj bo 'adjustment' (reset) PRVI
                     if (a.type === 'adjustment' && b.type !== 'adjustment') return -1;
                     if (a.type !== 'adjustment' && b.type === 'adjustment') return 1;
                     return 0;
                 });
-                
-                let currentBalances = {};
+                                let currentBalances = {};
                 members.forEach(m => currentBalances[m] = 0);
-                
-                const groupedByDate = {};
+                                const groupedByDate = {};
 
                 // Procesiraj transakcije
                 sortedHistory.forEach(entry => {
@@ -1019,8 +1031,7 @@
                 // Če imamo zgodovino, dodaj začetno točko 0 le, če PRVI vnos NI adjustment (reset)
                 // Če je bil reset, začnemo pri vrednostih reseta.
                 const hasResetStart = sortedHistory.length > 0 && sortedHistory[0].type === 'adjustment';
-                
-                if (!hasResetStart && sortedDates.length > 0) {
+                                if (!hasResetStart && sortedDates.length > 0) {
                       // Dodaj "Start" točko dan pred prvo transakcijo, da graf ne lebdi
                       const firstDate = new Date(sortedDates[0]);
                       firstDate.setDate(firstDate.getDate() - 1);
@@ -1030,11 +1041,11 @@
                 }
 
                 sortedDates.forEach(dateStr => {
-                    const point = { 
-                        date: new Date(dateStr).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' }),
+                    const point = {
+                          date: new Date(dateStr).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' }),
                         fullDate: dateStr,
-                        ...groupedByDate[dateStr] 
-                    };
+                        ...groupedByDate[dateStr]
+                     };
                     members.forEach(m => point[m] = parseFloat((point[m] || 0).toFixed(2)));
                     dataPoints.push(point);
                 });
@@ -1079,9 +1090,9 @@
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <RechartsTooltip 
-                                        formatter={(value) => `${value.toFixed(2)} €`}
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000' }}
+                                    <RechartsTooltip
+                                         formatter={(value) => `${value.toFixed(2)} €`}
+                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000' }}
                                     />
                                     <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }}/>
                                 </PieChart>
@@ -1097,33 +1108,33 @@
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={timeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "#334155" : "#f1f5f9"} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        tick={{fontSize: 9, fill: '#94a3b8'}} 
-                                        tickLine={false} 
-                                        axisLine={false} 
+                                    <XAxis
+                                        dataKey="date"
+                                        tick={{fontSize: 9, fill: '#94a3b8'}}
+                                        tickLine={false}
+                                        axisLine={false}
                                         interval="preserveStartEnd"
                                     />
-                                    <YAxis 
-                                        tick={{fontSize: 9, fill: '#94a3b8'}} 
-                                        tickLine={false} 
-                                        axisLine={false} 
+                                    <YAxis
+                                        tick={{fontSize: 9, fill: '#94a3b8'}}
+                                        tickLine={false}
+                                        axisLine={false}
                                         tickFormatter={(val) => `${val}€`}
                                         width={35}
                                     />
                                     <ReferenceLine y={0} stroke={darkMode ? "#475569" : "#cbd5e1"} strokeDasharray="3 3" />
-                                    <RechartsTooltip 
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000' }}
+                                    <RechartsTooltip
+                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', backgroundColor: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#000' }}
                                     />
                                     {members.map((m) => (
-                                        <Line 
-                                            key={m}
-                                            type="monotone" 
-                                            dataKey={m} 
-                                            stroke={memberColorMap[m]} 
-                                            strokeWidth={2}
-                                            dot={false}
-                                            activeDot={{ r: 4 }}
+                                        <Line
+                                          key={m}
+                                          type="monotone"
+                                          dataKey={m}
+                                          stroke={memberColorMap[m]}
+                                          strokeWidth={2}
+                                          dot={false}
+                                          activeDot={{ r: 4 }}
                                         />
                                     ))}
                                 </LineChart>
@@ -1133,19 +1144,18 @@
                     </div>
 
                     {/* GUMB DO MATRIK */}
-                    <button 
-                        onClick={() => setActiveTab('matrix')} 
+                    <button
+                        onClick={() => setActiveTab('matrix')}
                         disabled={isBlurred}
                         className={`w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center gap-2 transition-all border border-slate-200 dark:border-slate-600 ${isBlurred ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                     >
-                        {isBlurred ? <Lock size={16} /> : <Grid size={20} />} 
-                        {isBlurred ? 'Podroben pregled skrit' : 'Podroben pregled matrik'} 
-                        {!isBlurred && <ArrowRight size={16} />}
+                        {isBlurred ? <Lock size={16} /> : <Grid size={20} />}
+                         {isBlurred ? 'Podroben pregled skrit' : 'Podroben pregled matrik'}
+                         {!isBlurred && <ArrowRight size={16} />}
                     </button>
                 </div>
             );
         };
-
 
         const TabDashboard = ({ payerRanking, balances, setActiveTab, titles, onOpenRoulette, isBlurred, onOpenStats, memberHunger, onToggleHunger, dailyMessage, onEditMessage }) => (
           <div className="space-y-6 animate-fade-in">
@@ -1167,7 +1177,7 @@
             )}
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-lg border border-white dark:border-slate-700 text-center relative transition-colors">
-              <button 
+              <button
                 onClick={onEditMessage}
                 className="absolute top-4 right-4 text-slate-300 dark:text-slate-500 hover:text-[#002f55] dark:hover:text-white transition-colors p-2"
                 title="Uredi sporočilo"
@@ -1185,15 +1195,14 @@
                 </div>
               )}
             </div>
-            
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-colors">
+                        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-colors">
               <div className="p-5 border-b border-slate-50 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-700/30 flex justify-between items-center">
                 <h3 className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2"><ListOrdered size={18} className="text-[#002f55] dark:text-[#e4b00f]" /> Vrstni red</h3>
               </div>
               <div className={`divide-y divide-slate-50 dark:divide-slate-700 transition-all duration-500 ${isBlurred ? 'blur-lg select-none' : ''}`}>
                 {payerRanking.map((m, idx) => {
-                  const memberTitles = titles[m] || []; 
-                  return (
+                  const memberTitles = titles[m] || [];
+                   return (
                     <div key={m} className={`p-4 flex justify-between items-center ${idx === 0 ? 'bg-[#002f55]/10 dark:bg-[#002f55]/40' : ''}`}>
                       <div className="flex items-center gap-3">
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${idx === 0 ? 'bg-[#002f55] dark:bg-[#e4b00f] text-[#e4b00f] dark:text-[#002f55]' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>{idx + 1}</span>
@@ -1201,9 +1210,9 @@
                         {memberTitles.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
                             {memberTitles.map((t, i) => (
-                                <div 
-                                key={i} 
-                                title={t.label} 
+                                <div
+                                key={i}
+                                title={t.label}
                                 className={`flex items-center justify-center w-6 h-6 rounded-lg border ${t.bg} ${t.color}`}
                                 >
                                 <t.icon size={14} />
@@ -1212,7 +1221,7 @@
                             </div>
                         )}
                         </div>
-                        <button 
+                        <button
                             onClick={(e) => { e.stopPropagation(); onToggleHunger(m); }}
                             className={`ml-2 p-2 rounded-full transition-all ${memberHunger[m] ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-500 shadow-sm' : 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                         >
@@ -1225,8 +1234,7 @@
                 })}
               </div>
             </div>
-              
-            <button onClick={onOpenStats} className="w-full py-3 bg-[#002f55]/5 dark:bg-slate-800 text-[#002f55] dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-[#002f55]/10 dark:hover:bg-slate-700 transition-all border border-[#002f55]/10 dark:border-slate-700"><BarChart3 size={18} /> Statistika</button>
+                          <button onClick={onOpenStats} className="w-full py-3 bg-[#002f55]/5 dark:bg-slate-800 text-[#002f55] dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-[#002f55]/10 dark:hover:bg-slate-700 transition-all border border-[#002f55]/10 dark:border-slate-700"><BarChart3 size={18} /> Statistika</button>
           </div>
         );
 
@@ -1236,10 +1244,10 @@
             <div className="bg-white dark:bg-slate-800 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden"><div className="overflow-x-auto custom-scrollbar pb-2"><table className="w-full text-xs whitespace-nowrap"><thead><tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/50"><th className="p-3 text-left font-bold text-slate-400 dark:text-slate-500">Datum</th>{members.map(m => (<th key={m} className="p-3 text-right font-bold text-slate-600 dark:text-slate-300">{m.substring(0, 3)}</th>))}<th className="p-3 text-right font-black text-slate-800 dark:text-white">Σ</th></tr></thead><tbody>{matrixType === 'Z' && (() => { const adjustments = history.filter(e => e.type === 'adjustment'); const rowSum = members.reduce((sum, m) => sum + adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0), 0); return (<tr className="border-b-2 border-[#002f55]/20 dark:border-slate-600 bg-[#002f55]/5 dark:bg-slate-700/30 text-xs"><td className="p-3 font-bold text-[#002f55] dark:text-[#e4b00f] border-r border-[#002f55]/20 dark:border-slate-600">Začetno stanje <span className="block text-[9px] font-normal text-[#002f55]/60 dark:text-slate-400">Prenos</span></td>{members.map(m => { const val = adjustments.reduce((s, e) => s + (e.user === m ? e.amount : 0), 0); return (<td key={m} className={`p-3 text-right tabular-nums ${val !== 0 ? (val >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400') : 'text-slate-400 dark:text-slate-600'}`}>{val !== 0 ? (val > 0 ? '+' : '') + val.toFixed(1) : '0.0'}</td>); })}<td className="p-3 text-right font-black text-[#002f55] dark:text-white bg-[#002f55]/10 dark:bg-slate-700">{rowSum !== 0 ? (rowSum > 0 ? '+' : '') + rowSum.toFixed(1) : '0.0'}</td></tr>); })()}{history.map(entry => { if (matrixType === 'Z' || (matrixType !== 'Z' && entry.type === 'adjustment')) return null; const rowSum = members.reduce((sum, m) => sum + getMatrixValue(entry, m, matrixType), 0); return (<tr key={entry.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"><td className="p-3 text-slate-500 dark:text-slate-400 font-medium border-r border-slate-50 dark:border-slate-700">{new Date(entry.date).toLocaleDateString('sl-SI', { day: 'numeric', month: 'numeric' })} <span className="text-[9px] text-slate-300 dark:text-slate-600 ml-1">{entry.opis.substring(0, 8)}</span></td>{members.map(m => { const val = getMatrixValue(entry, m, matrixType); return (<td key={m} className={`p-3 text-right tabular-nums ${val !== 0 ? (matrixType === 'S' ? 'text-rose-500 dark:text-rose-400' : (matrixType === 'Z' ? (val > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400') : 'text-[#002f55] dark:text-[#e4b00f] font-bold')) : 'text-slate-200 dark:text-slate-700'}`}>{val !== 0 ? val.toFixed(1) : '-'}</td>) })}<td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200 bg-slate-50/30 dark:bg-slate-700/20">{rowSum.toFixed(1)}</td></tr>) })}</tbody><tfoot><tr className="bg-slate-100 dark:bg-slate-700 font-black text-slate-700 dark:text-slate-200"><td className="p-3">SKUPAJ</td>{members.map(m => { const colSum = history.reduce((sum, e) => { if (matrixType === 'Z') return sum + (e.type === 'adjustment' && e.user === m ? (parseFloat(e.amount) || 0) : 0); return e.type === 'adjustment' ? sum : sum + getMatrixValue(e, m, matrixType); }, 0); return <td key={m} className="p-3 text-right">{colSum.toFixed(1)}</td> })}<td className="p-3 text-right">{history.reduce((tot, e) => { if ((matrixType === 'Z' && e.type !== 'adjustment') || (matrixType !== 'Z' && e.type === 'adjustment')) return tot; return tot + parseFloat(e.amount || 0); }, 0).toFixed(1)}</td></tr></tfoot></table></div></div><button onClick={onPrint} className="w-full mt-4 py-3 bg-[#002f55]/5 dark:bg-slate-800 text-[#002f55] dark:text-slate-300 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-[#002f55]/10 dark:hover:bg-slate-700 transition-all border border-[#002f55]/10 dark:border-slate-700"><Printer size={18} /> Shrani PDF Poročilo</button></div>
         );
 
-        const TabAddEntry = ({ 
-          addEntry, amount, setAmount, payer, setPayer, members, selectedParticipants, setSelectedParticipants, 
-          date, setDate, splitType, setSplitType, manualAmounts, setManualAmounts, isManualBalanced 
-        }) => (
+        const TabAddEntry = ({
+           addEntry, amount, setAmount, payer, setPayer, members, selectedParticipants, setSelectedParticipants,
+           date, setDate, splitType, setSplitType, manualAmounts, setManualAmounts, isManualBalanced
+         }) => (
           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 animate-fade-in transition-colors">
             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2"><PlusCircle className="text-[#002f55] dark:text-[#e4b00f]" /> Nov račun</h3>
             <form onSubmit={addEntry} className="space-y-6">
@@ -1278,10 +1286,10 @@
                       </div>
                       <div className="flex-1 min-w-0 pr-2">
                         <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                          {isAdj ? e.user : e.payer} 
-                          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-1">
-                            {isAdj ? 'prenos stanja' : 'je plačal/a'}
-                          </span>
+                          {isAdj ? e.user : e.payer}
+                           <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ml-1">
+                             {isAdj ? 'prenos stanja' : 'je plačal/a'}
+                           </span>
                         </p>
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{e.opis}</span>
@@ -1316,10 +1324,9 @@
           </div>
         );
 
-        const TabSettings = ({ members, history, removeMember, showAddMember, setShowAddMember, newMemberName, setNewMemberName, addMember, darkMode, toggleDarkMode, instructions, onEditInstructions }) => (
+        const TabSettings = ({ members, history, removeMember, showAddMember, setShowAddMember, newMemberName, setNewMemberName, addMember, darkMode, toggleDarkMode, instructions, onEditInstructions, onRequestVisitLog, showVisitLog, visitHistory }) => (
           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 animate-fade-in transition-colors">
-            
-            {/* DARK MODE TOGGLE */}
+                        {/* DARK MODE TOGGLE */}
             <div className="flex justify-between items-center mb-8 bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl">
                 <div className="flex items-center gap-3">
                     <div className="bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] p-2 rounded-xl">
@@ -1330,7 +1337,7 @@
                         <p className="text-[10px] text-slate-400 dark:text-slate-400 font-bold uppercase">{darkMode ? 'Temni način' : 'Svetli način'}</p>
                     </div>
                 </div>
-                <button 
+                <button
                     onClick={toggleDarkMode}
                     className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out ${darkMode ? 'bg-[#e4b00f]' : 'bg-slate-200'}`}
                 >
@@ -1354,8 +1361,7 @@
             ) : (
               <div className="flex gap-2 mb-4"><input autoFocus type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="Ime..." className="flex-1 p-3 bg-slate-100 dark:bg-slate-700 dark:text-white rounded-xl outline-none" onKeyDown={e => e.key === 'Enter' && addMember()} /><button onClick={addMember} className="bg-[#002f55] dark:bg-[#e4b00f] text-white dark:text-[#002f55] px-6 rounded-xl font-black">DODAJ</button></div>
             )}
-            
-            {/* INSTRUCTIONS SECTION */}
+                        {/* INSTRUCTIONS SECTION */}
             <div className="mt-8 border-t border-slate-100 dark:border-slate-700 pt-6">
                 <div className="flex justify-between items-center mb-4">
                      <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2"><BookOpen className="text-[#002f55] dark:text-[#e4b00f]" /> Pomoč in Navodila</h3>
@@ -1367,6 +1373,57 @@
                     </div>
                 </div>
             </div>
+
+            {/* ADMIN VISIT LOG SECTION - CAMOUFLAGED AS "ABOUT" */}
+            <div className="mt-8 border-t border-slate-100 dark:border-slate-700 pt-6">
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <Info size={20} className="text-slate-400" /> O aplikaciji
+                </h3>
+                
+                <div className="text-[10px] text-slate-400 space-y-1 mb-4 font-medium">
+                    <p className="text-slate-600 dark:text-slate-300 font-bold">
+                        Powered by LESV, IME
+                    </p>
+                    <p>
+                        FERI, Univerza v Mariboru
+                    </p>
+                    <p>
+                        Optimizacija stroškov prehrane.
+                    </p>
+                    <p className="opacity-50 text-[9px] pt-2">
+                        januar 2026
+                    </p>
+                </div>
+
+                {!showVisitLog ? (
+                    <button 
+                        onClick={onRequestVisitLog} 
+                        className="text-[10px] font-bold text-slate-300 hover:text-[#002f55] dark:hover:text-[#e4b00f] transition-colors flex items-center gap-2"
+                    >
+                        <Activity size={12} /> Diagnostika sistema
+                    </button>
+                ) : (
+                    <div className="bg-slate-900 text-green-400 p-4 rounded-xl font-mono text-[9px] space-y-2 overflow-x-auto border border-slate-800 mt-2 animate-fade-in">
+                        <div className="flex justify-between items-center border-b border-green-900/50 pb-2 mb-2">
+                            <span className="font-bold uppercase text-green-600">System Diagnostic Log</span>
+                            <span className="text-[8px] text-green-800">SECURE</span>
+                        </div>
+                        {visitHistory.length === 0 ? <p className="italic text-slate-600">Ni zapisov.</p> : visitHistory.map((v, i) => (
+                            <div key={i} className="flex flex-col gap-1 border-b border-slate-800 pb-2 last:border-0">
+                                <div className="flex justify-between text-green-200 font-bold">
+                                    <span>{v.timestamp ? new Date(v.timestamp.toMillis()).toLocaleString('sl-SI') : 'N/A'}</span>
+                                    <span className="bg-green-900/30 px-1 rounded text-green-400">{v.device}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-slate-500">
+                                    <span>Res: <span className="text-slate-400">{v.screen || '?'}</span></span>
+                                    <span>Lang: <span className="text-slate-400">{v.lang || '?'}</span></span>
+                                </div>
+                                <div className="truncate text-slate-600 text-[8px]">{v.ua}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
           </div>
         );
 
@@ -1375,49 +1432,52 @@
         // ==========================================
 
         export default function App() {
-          const [user, setUser] = useState(null); 
-          const [isAuthenticated, setIsAuthenticated] = useState(false); 
-          const [inputCode, setInputCode] = useState(''); 
-          const [authError, setAuthError] = useState(false); 
-
-          const [members, setMembers] = useState([]); 
-          const [memberHunger, setMemberHunger] = useState({}); 
-          const [history, setHistory] = useState([]); 
-          const [loading, setLoading] = useState(true); 
-
-          const [globalSettings, setGlobalSettings] = useState({ isBlurred: false, dailyMessage: "", instructions: "" }); 
-
-          const [activeTab, setActiveTab] = useState('dashboard'); 
-          const [showAddMember, setShowAddMember] = useState(false); 
-          const [newMemberName, setNewMemberName] = useState(''); 
-
+          const [user, setUser] = useState(null);
+           const [isAuthenticated, setIsAuthenticated] = useState(false);
+           const [inputCode, setInputCode] = useState('');
+           const [authError, setAuthError] = useState(false);
+ 
+          const [members, setMembers] = useState([]);
+           const [memberHunger, setMemberHunger] = useState({});
+           const [history, setHistory] = useState([]);
+           const [loading, setLoading] = useState(true);
+ 
+          const [globalSettings, setGlobalSettings] = useState({ isBlurred: false, dailyMessage: "", instructions: "" });
+ 
+          const [activeTab, setActiveTab] = useState('dashboard');
+           const [showAddMember, setShowAddMember] = useState(false);
+           const [newMemberName, setNewMemberName] = useState('');
+ 
           const [showResetConfirm, setShowResetConfirm] = useState(false);
           const [entryToDelete, setEntryToDelete] = useState(null);
 
           const [showAdminAuth, setShowAdminAuth] = useState(false);
           const [adminPinInput, setAdminPinInput] = useState('');
-          const [pendingAction, setPendingAction] = useState(null); 
-          const [adminAuthError, setAdminAuthError] = useState(false);
+          const [pendingAction, setPendingAction] = useState(null);
+           const [adminAuthError, setAdminAuthError] = useState(false);
 
           const [isResetting, setIsResetting] = useState(false);
-          const [matrixType, setMatrixType] = useState('P'); 
-          const [manualStartBalances, setManualStartBalances] = useState({}); 
-
+          const [matrixType, setMatrixType] = useState('P');
+           const [manualStartBalances, setManualStartBalances] = useState({});
+ 
           const [amount, setAmount] = useState('');
           const [payer, setPayer] = useState('');
           const [selectedParticipants, setSelectedParticipants] = useState([]);
           const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-          const [splitType, setSplitType] = useState('equal'); 
-          const [manualAmounts, setManualAmounts] = useState({});
+          const [splitType, setSplitType] = useState('equal');
+           const [manualAmounts, setManualAmounts] = useState({});
 
           const [showRoulette, setShowRoulette] = useState(false);
-          const [showStats, setShowStats] = useState(false); 
-
+          const [showStats, setShowStats] = useState(false);
+ 
           const [showMessageModal, setShowMessageModal] = useState(false);
           const [messageInput, setMessageInput] = useState("");
-          
           const [showInstructionsModal, setShowInstructionsModal] = useState(false);
           const [instructionsInput, setInstructionsInput] = useState("");
+
+          // --- ADMIN VISIT LOG STATES ---
+          const [showVisitLog, setShowVisitLog] = useState(false);
+          const [visitHistory, setVisitHistory] = useState([]);
 
           // --- DARK MODE STATE ---
           const [darkMode, setDarkMode] = useState(() => {
@@ -1444,12 +1504,10 @@
           const [snakeMode, setSnakeMode] = useState(false);
           const titleClicksRef = useRef(0);
           const titleClickTimeoutRef = useRef(null);
-          
-          const handleTitleClick = () => {
+                    const handleTitleClick = () => {
               titleClicksRef.current += 1;
               if (titleClickTimeoutRef.current) clearTimeout(titleClickTimeoutRef.current);
-              
-              if (titleClicksRef.current >= 5) {
+                            if (titleClicksRef.current >= 5) {
                   setSnakeMode(true);
                   titleClicksRef.current = 0;
               } else {
@@ -1477,6 +1535,35 @@
             return () => unsubscribe();
           }, []);
 
+          // --- SILENT VISIT LOGGING (UPDATED WITH MORE INFO) ---
+          const hasLoggedVisit = useRef(false);
+          useEffect(() => {
+              if (user && !hasLoggedVisit.current) {
+                  hasLoggedVisit.current = true;
+                  const logVisit = async () => {
+                      try {
+                          const ua = navigator.userAgent;
+                          let device = 'PC';
+                          if (/android/i.test(ua)) device = 'Android';
+                          else if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) device = 'iOS';
+                          
+                          // Additional Info
+                          const screenRes = typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : 'N/A';
+                          const lang = navigator.language || 'N/A';
+
+                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'visits'), {
+                              timestamp: serverTimestamp(),
+                              device,
+                              ua,
+                              screen: screenRes,
+                              lang: lang
+                          });
+                      } catch (e) { console.error("Logging error", e); }
+                  };
+                  logVisit();
+              }
+          }, [user]);
+
           useEffect(() => {
             if (!user) return;
             const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
@@ -1493,14 +1580,13 @@
 
             const unsubMembers = onSnapshot(membersRef, (snapshot) => {
               const mList = [];
-              const mHunger = {}; 
-              snapshot.docs.forEach(doc => { 
-                  const d = doc.data();
+              const mHunger = {};
+               snapshot.docs.forEach(doc => {
+                   const d = doc.data();
                   mList.push(d.name);
-                  if (d.isHungry) mHunger[d.name] = true; 
-               }); 
-              
-              if (mList.length === 0 && loading) {
+                  if (d.isHungry) mHunger[d.name] = true;
+                });
+                             if (mList.length === 0 && loading) {
                 const defaults = ["Martin", "Mitja", "Pavel", "Matej", "Zala", "Stela"];
                 defaults.forEach(async (n) => {
                   await setDoc(doc(membersRef, n), { name: n });
@@ -1513,8 +1599,8 @@
 
             const unsubHistory = onSnapshot(historyRef, (snapshot) => {
               const hList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              hList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); 
-              setHistory(hList);
+              hList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+               setHistory(hList);
               setLoading(false);
             });
 
@@ -1526,14 +1612,13 @@
               if (!payer || !members.includes(payer)) setPayer(members[0]);
               if (selectedParticipants.length === 0) setSelectedParticipants([...members]);
             }
-          }, [members]); 
-
+          }, [members]);
+ 
           // --- 2. IZRAČUNI ---
           const balances = useMemo(() => {
             const b = {};
-            members.forEach(m => b[m] = 0); 
-            
-            history.forEach(entry => {
+            members.forEach(m => b[m] = 0);
+                          history.forEach(entry => {
               if (entry.user && !b.hasOwnProperty(entry.user)) b[entry.user] = 0;
               if (entry.payer && !b.hasOwnProperty(entry.payer)) b[entry.payer] = 0;
               if (entry.participants) entry.participants.forEach(p => { if (!b.hasOwnProperty(p)) b[p] = 0; });
@@ -1569,9 +1654,8 @@
 
           const titles = useMemo(() => {
             return calculateTitles(members, balances, history);
-          }, [members, balances, history]); 
-          
-          const settlements = useMemo(() => {
+          }, [members, balances, history]);
+                     const settlements = useMemo(() => {
             const bCopy = { ...balances };
             const debtors = [], creditors = [];
             Object.entries(bCopy).forEach(([n, v]) => {
@@ -1579,9 +1663,8 @@
               else if (v > 0.01) creditors.push({ n, v });
             });
             debtors.sort((a, b) => b.v - a.v);
-            creditors.sort((a, b) => b.v - a.v); 
-            
-            const res = [];
+            creditors.sort((a, b) => b.v - a.v);
+                          const res = [];
             let di = 0, ci = 0;
             while (di < debtors.length && ci < creditors.length) {
               const amt = money(Math.min(debtors[di].v, creditors[ci].v));
@@ -1617,12 +1700,33 @@
           const handleToggleDarkMode = () => {
             setDarkMode(prev => !prev);
           };
-          
-          const handleEditInstructions = () => {
+                    const handleEditInstructions = () => {
              setPendingAction({ type: 'EDIT_INSTRUCTIONS' });
              setAdminPinInput('');
              setAdminAuthError(false);
              setShowAdminAuth(true);
+          };
+
+          // --- NEW: REQUEST ADMIN VISIT LOG ---
+          const handleRequestVisitLog = () => {
+              setPendingAction({ type: 'SHOW_VISIT_LOG' });
+              setAdminPinInput('');
+              setAdminAuthError(false);
+              setShowAdminAuth(true);
+          };
+
+          // --- NEW: LOAD VISIT LOGS ---
+          const loadVisitLogs = async () => {
+              try {
+                  const q = collection(db, 'artifacts', appId, 'public', 'data', 'visits');
+                  const snap = await getDocs(q);
+                  const logs = snap.docs.map(doc => doc.data());
+                  // Client-side sort to avoid complex index requirements
+                  logs.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                  setVisitHistory(logs.slice(0, 20));
+              } catch (e) {
+                  console.error("Error loading visits", e);
+              }
           };
 
           // --- NEW INSTANT TOGGLE BLUR FOR SNAKE GAME ---
@@ -1635,9 +1739,8 @@
           const handleAddEntrySubmit = async (e) => {
             e.preventDefault();
             if (!user || !amount || selectedParticipants.length === 0) return;
-            if (splitType === 'manual' && !isManualBalanced) return; 
-            
-            // Direktno izvedemo akcijo brez PIN preverjanja
+            if (splitType === 'manual' && !isManualBalanced) return;
+                          // Direktno izvedemo akcijo brez PIN preverjanja
             await performAddEntry();
           };
 
@@ -1645,8 +1748,7 @@
               if (!user) return;
               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { dailyMessage: msg }, { merge: true });
           };
-          
-          const saveInstructions = async () => {
+                    const saveInstructions = async () => {
               if (!user) return;
               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { instructions: instructionsInput }, { merge: true });
               setShowInstructionsModal(false);
@@ -1665,21 +1767,19 @@
 
           const performAddEntry = async () => {
             if (!user || !amount || selectedParticipants.length === 0) return;
-            
-            const batch = writeBatch(db);
+                        const batch = writeBatch(db);
 
-            const data = { 
-               date, 
-               payer, 
-               amount: parseFloat(amount), 
-               participants: [...selectedParticipants], 
-               splitType, 
-               timestamp: Date.now(), 
-               opis: document.getElementById('opis-input')?.value || 'Malica' 
-             };
-            if (splitType === 'manual') data.manualAmounts = { ...manualAmounts }; 
-            
-            // 1. Dodaj vnos v zgodovino
+            const data = {
+                date,
+                payer,
+                amount: parseFloat(amount),
+                participants: [...selectedParticipants],
+                splitType,
+                timestamp: Date.now(),
+                opis: document.getElementById('opis-input')?.value || 'Malica'
+              };
+            if (splitType === 'manual') data.manualAmounts = { ...manualAmounts };
+                          // 1. Dodaj vnos v zgodovino
             const historyRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
             batch.set(historyRef, data);
 
@@ -1717,8 +1817,7 @@
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', entryToDelete));
             setEntryToDelete(null);
           };
-          
-          const performEditInstructions = () => {
+                    const performEditInstructions = () => {
               setInstructionsInput(globalSettings.instructions || "");
               setShowInstructionsModal(true);
           };
@@ -1753,9 +1852,9 @@
           const toggleHungerAction = async (name) => {
             if (!user) return;
             const isHungry = !!memberHunger[name];
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', name), { 
-                  isHungry: !isHungry 
-             }, { merge: true });
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', name), {
+                   isHungry: !isHungry
+              }, { merge: true });
           };
 
           const verifyAdminPin = async () => {
@@ -1763,7 +1862,7 @@
             const action = pendingAction?.type;
             let valid = false;
 
-            if ((action === 'DELETE' || action === 'RESET' || action === 'TOGGLE_BLUR' || action === 'EDIT_INSTRUCTIONS') && pin === ADMIN_PIN) valid = true;
+            if ((action === 'DELETE' || action === 'RESET' || action === 'TOGGLE_BLUR' || action === 'EDIT_INSTRUCTIONS' || action === 'SHOW_VISIT_LOG') && pin === ADMIN_PIN) valid = true;
             else if ((action === 'ADD' || action === 'ADD_MEMBER') && (pin === EDIT_CODE || pin === ADMIN_PIN)) valid = true;
 
             if (valid) {
@@ -1784,6 +1883,9 @@
                 await setDoc(settingsRef, { isBlurred: !globalSettings.isBlurred }, { merge: true });
               } else if (action === 'EDIT_INSTRUCTIONS') {
                   performEditInstructions();
+              } else if (action === 'SHOW_VISIT_LOG') {
+                  loadVisitLogs();
+                  setShowVisitLog(true);
               }
               setPendingAction(null);
             } else {
@@ -1798,20 +1900,18 @@
               const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'history');
               const snap = await getDocs(historyRef);
               const batch = writeBatch(db);
-              
-              snap.docs.forEach(d => batch.delete(d.ref));
-              
-              for (const [name, val] of Object.entries(manualStartBalances)) {
+                          snap.docs.forEach(d => batch.delete(d.ref));
+                          for (const [name, val] of Object.entries(manualStartBalances)) {
                 const v = parseFloat(val) || 0;
                 if (Math.abs(v) < 0.01) continue;
-                batch.set(doc(historyRef), { 
-                   type: 'adjustment', 
-                   user: name, 
-                   amount: v, 
-                   timestamp: Date.now(), 
-                   date: new Date().toISOString().split('T')[0], 
-                   opis: 'Začetno stanje' 
-                 });
+                batch.set(doc(historyRef), {
+                    type: 'adjustment',
+                    user: name,
+                    amount: v,
+                    timestamp: Date.now(),
+                    date: new Date().toISOString().split('T')[0],
+                    opis: 'Začetno stanje'
+                  });
               }
               await batch.commit();
               setShowResetConfirm(false);
@@ -1837,83 +1937,25 @@
 
           return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 font-sans app-container transition-colors duration-300">
-              <style>{`
-                @media print {
-                    @page { margin: 1cm; size: A4; }
-                    html, body { width: 100%; height: auto; margin: 0 !important; padding: 0 !important; overflow: visible !important; background-color: white !important; }
-                    
-                    /* Hide everything by default */
-                    body > * { display: none !important; }
-                    
-                    /* But show #root (where React lives) */
-                    body > #root { display: block !important; width: 100%; height: auto; overflow: visible; }
-                    
-                    /* Hide everything in #root */
-                    #root > * { display: none !important; }
-                    
-                    /* But show .app-container */
-                    #root > .app-container { display: block !important; width: 100%; height: auto; overflow: visible; position: static; }
-                    
-                    /* Hide everything in .app-container */
-                    .app-container > * { display: none !important; }
-                    
-                    /* But show .print-container */
-                    .app-container > .print-container { display: block !important; width: 100%; height: auto; }
-                    
-                    /* Print container styling */
-                    .print-container { 
-                          font-family: sans-serif; 
-                          font-size: 10px; 
-                          color: black; 
-                          background: white; 
-                      }
-
-                    /* Ensure tables print nicely */
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #ddd; padding: 4px; }
-                    
-                    .page-break { page-break-before: always; }
-                    .avoid-break { page-break-inside: avoid; }
-                    ::-webkit-scrollbar { display: none; }
-                }
-                .print-container { display: none; }
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-                .dark .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-                .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
-                .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-                .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                .report-table th, .report-table td { border: 1px solid #e2e8f0; padding: 4px 6px; }
-                .report-table th { background-color: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 9px; }
-                .code-block { font-family: 'Courier New', Courier, monospace; background-color: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; white-space: pre-wrap; font-size: 9px; color: #334155; }
-              
-                @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-                .animate-scroll { display: flex; width: max-content; animation: scroll 30s linear infinite; }
-                .ticker-mask { mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
-              `}</style>
-
               <AdminModal show={showAdminAuth} pin={adminPinInput} setPin={setAdminPinInput} error={adminAuthError} pendingAction={pendingAction} onConfirm={verifyAdminPin} onCancel={() => { setShowAdminAuth(false); setPendingAction(null); }} />
               <DeleteConfirmModal entry={entryToDelete} onConfirm={performDeleteEntry} onCancel={() => setEntryToDelete(null)} />
               <RouletteModal members={members} balances={balances} show={showRoulette} onClose={() => setShowRoulette(false)} />
               <MessageModal show={showMessageModal} message={messageInput} setMessage={setMessageInput} onConfirm={saveMessageFromModal} onCancel={() => setShowMessageModal(false)} />
               <InstructionsEditModal show={showInstructionsModal} instructions={instructionsInput} setInstructions={setInstructionsInput} onConfirm={saveInstructions} onCancel={() => setShowInstructionsModal(false)} />
-              
-              {/* EASTER EGG GAME */}
+                          {/* EASTER EGG GAME */}
               {snakeMode && <SnakeGame onClose={() => setSnakeMode(false)} instantToggleBlur={instantToggleBlur} isBlurred={globalSettings.isBlurred} />}
 
-              <StatisticsModal 
-                  show={showStats} 
-                  onClose={() => setShowStats(false)} 
-                  onOpenGame={() => setSnakeMode(true)}
-                  history={history} 
-              />
+              <StatisticsModal
+                   show={showStats}
+                   onClose={() => setShowStats(false)}
+                   onOpenGame={() => setSnakeMode(true)}
+                   history={history}
+               />
 
               <PrintReport history={history} members={members} balances={balances} settlements={settlements} />
 
               <header className="bg-gradient-to-br from-[#002f55] to-[#001f3f] dark:from-[#001f3f] dark:to-[#000a1f] text-white p-6 rounded-b-[2.5rem] shadow-xl mb-6 print:hidden text-center relative overflow-hidden transition-colors">
-                <h1 
+                <h1
                     onClick={handleTitleClick}
                     className="text-2xl font-bold flex items-center justify-center gap-2 relative z-10 cursor-pointer select-none active:scale-95 transition-transform"
                 >
@@ -1924,51 +1966,52 @@
 
               <main className="max-w-md mx-auto px-4 print:hidden">
                 {activeTab === 'dashboard' && (
-                  <TabDashboard 
-                      payerRanking={payerRanking} 
-                      balances={balances} 
-                      setActiveTab={setActiveTab} 
-                      titles={titles} 
-                      onOpenRoulette={() => setShowRoulette(true)}
-                    isBlurred={globalSettings.isBlurred}
-                    onOpenStats={() => setShowStats(true)} 
-                    memberHunger={memberHunger}
-                    onToggleHunger={toggleHungerAction}
-                    dailyMessage={globalSettings.dailyMessage}
-                    onEditMessage={openMessageModal}
+                  <TabDashboard
+                       payerRanking={payerRanking}
+                       balances={balances}
+                       setActiveTab={setActiveTab}
+                       titles={titles}
+                       onOpenRoulette={() => setShowRoulette(true)}
+                       isBlurred={globalSettings.isBlurred}
+                       onOpenStats={() => setShowStats(true)}
+                      memberHunger={memberHunger}
+                       onToggleHunger={toggleHungerAction}
+                       dailyMessage={globalSettings.dailyMessage}
+                       onEditMessage={openMessageModal}
                   />
                 )}
-                
-                {/* AKTIVACIJA NOVEGA ZAVIHEKA */}
+                                {/* AKTIVACIJA NOVEGA ZAVIHEKA */}
                 {activeTab === 'analytics' && <TabAnalytics history={history} members={members} setActiveTab={setActiveTab} isBlurred={globalSettings.isBlurred} darkMode={darkMode} />}
-                
-                {activeTab === 'matrix' && <TabMatrix members={members} history={history} matrixType={matrixType} setMatrixType={setMatrixType} onPrint={handlePrintReport} />}
+                                {activeTab === 'matrix' && <TabMatrix members={members} history={history} matrixType={matrixType} setMatrixType={setMatrixType} onPrint={handlePrintReport} />}
                 {activeTab === 'add' && (
-                  <TabAddEntry 
-                    addEntry={handleAddEntrySubmit} amount={amount} setAmount={setAmount} payer={payer} setPayer={setPayer} members={members} 
-                    selectedParticipants={selectedParticipants} setSelectedParticipants={setSelectedParticipants} 
-                    date={date} setDate={setDate} splitType={splitType} setSplitType={setSplitType} 
-                    manualAmounts={manualAmounts} setManualAmounts={setManualAmounts} isManualBalanced={isManualBalanced} 
-                  />
+                  <TabAddEntry
+                     addEntry={handleAddEntrySubmit} amount={amount} setAmount={setAmount} payer={payer} setPayer={setPayer} members={members}
+                     selectedParticipants={selectedParticipants} setSelectedParticipants={setSelectedParticipants}
+                     date={date} setDate={setDate} splitType={splitType} setSplitType={setSplitType}
+                     manualAmounts={manualAmounts} setManualAmounts={setManualAmounts} isManualBalanced={isManualBalanced}
+                   />
                 )}
                 {activeTab === 'history' && <TabHistory history={history} confirmDeleteEntry={confirmDeleteEntry} onToggleBlur={handleToggleBlur} />}
                 {activeTab === 'settle' && !globalSettings.isBlurred && (
-                  <TabSettlement 
-                    settlements={settlements} onPrint={handlePrintReport} showResetConfirm={showResetConfirm} setShowResetConfirm={setShowResetConfirm} 
-                    manualStartBalances={manualStartBalances} setManualStartBalances={setManualStartBalances} members={members} 
-                    balances={balances} isResetBalanced={isResetBalanced} isResetting={isResetting} finalizeReset={finalizeReset} 
-                    startResetProcess={startResetProcess} historyLength={history.length} 
-                    onOpenSettings={() => setActiveTab('settings')}
+                  <TabSettlement
+                     settlements={settlements} onPrint={handlePrintReport} showResetConfirm={showResetConfirm} setShowResetConfirm={setShowResetConfirm}
+                     manualStartBalances={manualStartBalances} setManualStartBalances={setManualStartBalances} members={members}
+                     balances={balances} isResetBalanced={isResetBalanced} isResetting={isResetting} finalizeReset={finalizeReset}
+                     startResetProcess={startResetProcess} historyLength={history.length}
+                     onOpenSettings={() => setActiveTab('settings')}
                   />
                 )}
                 {activeTab === 'settings' && (
-                  <TabSettings 
-                    members={members} history={history} removeMember={removeMember} 
-                    showAddMember={showAddMember} setShowAddMember={setShowAddMember} 
-                    newMemberName={newMemberName} setNewMemberName={setNewMemberName} addMember={addMemberAction} 
-                    darkMode={darkMode} toggleDarkMode={handleToggleDarkMode}
-                    instructions={globalSettings.instructions}
-                    onEditInstructions={handleEditInstructions}
+                  <TabSettings
+                     members={members} history={history} removeMember={removeMember}
+                     showAddMember={showAddMember} setShowAddMember={setShowAddMember}
+                     newMemberName={newMemberName} setNewMemberName={setNewMemberName} addMember={addMemberAction}
+                     darkMode={darkMode} toggleDarkMode={handleToggleDarkMode}
+                     instructions={globalSettings.instructions}
+                     onEditInstructions={handleEditInstructions}
+                     onRequestVisitLog={handleRequestVisitLog}
+                     showVisitLog={showVisitLog}
+                     visitHistory={visitHistory}
                   />
                 )}
               </main>
